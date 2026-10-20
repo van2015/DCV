@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import ELK from "../apps/web/node_modules/elkjs/lib/elk.bundled.js";
+import type { OverlayStatus } from "../apps/web/src/diagram/overlay.js";
 import { projectSnapshot } from "../apps/web/src/diagram/projection.js";
 import { buildLayoutGraph } from "../apps/web/src/diagram/layout/graph.js";
 import {
@@ -138,7 +139,9 @@ count((layout.children ?? []) as never[]);
 
 const focusStart = performance.now();
 const neighborhood = focusNeighborhood({
-  nodeStatuses: new Map([[classes.nodes[0]?.id ?? "", "added" as const]]),
+  nodeStatuses: new Map<string, OverlayStatus>([
+    [classes.nodes[0]?.id ?? "", { status: "added", probable: false, kind: "class" }]
+  ]),
   ghostIds: [],
   focusedNodeId: classes.nodes[0]?.id ?? null,
   edges: classes.edges,
@@ -198,4 +201,7 @@ const report = [
   ""
 ].join("\n");
 
-await writeFile("openspec/changes/add-uml-history-viewer/benchmark.md", report, "utf8");
+const reportPath =
+  process.env.DCV_BENCH_OUTPUT ??
+  "openspec/changes/archive/2026-10-20-add-uml-history-viewer/benchmark.md";
+await writeFile(reportPath, report, "utf8");

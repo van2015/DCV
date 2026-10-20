@@ -11,4 +11,4 @@ await createFixtureRepos(fixturesDir);
 process.env.DCV_DATA_DIR = dataDir;
 process.env.DCV_WEB_ROOT ??= resolve("apps/web/dist");
 
-await import("../apps/server/dist/index.js");
+await import(new URL("../apps/server/dist/index.js", import.meta.url).href);
