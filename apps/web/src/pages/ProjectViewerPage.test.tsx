@@ -245,8 +245,13 @@ describe("ProjectViewerPage", () => {
 
     const serviceCard = await screen.findByLabelText("class Service");
     expect(serviceCard.querySelector(".status-body-only")).toHaveTextContent("≈");
-    expect(screen.getByLabelText("class New").querySelector(".change-badge")).toHaveTextContent("+");
-    expect(screen.getByLabelText("class Old (eliminado)").querySelector(".change-badge")).toHaveTextContent("−");
+    const addedCard = screen.getByLabelText("class New");
+    expect(addedCard).toHaveClass("change-added");
+    expect(addedCard.querySelector(".change-badge")).toHaveTextContent("+");
+    const removedCard = screen.getByLabelText("class Old (eliminado)");
+    expect(removedCard).toHaveClass("change-removed");
+    expect(removedCard).toHaveClass("ghost");
+    expect(removedCard.querySelector(".change-badge")).toHaveTextContent("−");
 
     await user.click(screen.getByText("Clase Old"));
     await waitFor(() => {

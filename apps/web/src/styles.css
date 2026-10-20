@@ -692,6 +692,25 @@ button.danger {
   color: #0e7490;
 }
 
+.uml-node.change-added {
+  --change-color: #15803d;
+}
+
+.uml-node.change-removed {
+  --change-color: #b91c1c;
+}
+
+.uml-node.change-added,
+.uml-node.change-removed {
+  border-color: color-mix(in srgb, var(--change-color) 45%, #fff);
+  background: color-mix(in srgb, var(--change-color) 8%, #fff);
+}
+
+.uml-node.change-added .uml-node-header,
+.uml-node.change-removed .uml-node-header {
+  background: color-mix(in srgb, var(--change-color) 16%, #fff);
+}
+
 .change-badge.probable {
   border-style: dashed;
 }
@@ -699,7 +718,6 @@ button.danger {
 .uml-node.ghost {
   opacity: 0.55;
   border-style: dashed;
-  filter: saturate(0.4);
 }
 
 .change-badge + .change-badge {

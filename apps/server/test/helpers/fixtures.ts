@@ -2,7 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { git, headSha, initRepo } from "./git.js";
 
-export type FixtureScenario = "oo" | "functional" | "mixed" | "monorepo" | "broken" | "large";
+export type FixtureScenario =
+  | "oo"
+  | "functional"
+  | "mixed"
+  | "monorepo"
+  | "broken"
+  | "large"
+  | "diff-colors";
 
 export interface FixtureCommit {
   sha: string;
@@ -345,6 +352,49 @@ function scenarioCommits(scenario: FixtureScenario): CommitSpec[] {
         { message: "modifica una clase", files: changed }
       ];
     }
+    case "diff-colors":
+      return [
+        {
+          message: "modelo con baja",
+          files: {
+            "src/base.ts": [
+              "export class Stable {",
+              "  value(): number {",
+              "    return 1;",
+              "  }",
+              "}",
+              "",
+              "export class Gone {",
+              "  value(): number {",
+              "    return 2;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "elimina Gone y agrega Added",
+          files: {
+            "src/base.ts": [
+              "export class Stable {",
+              "  value(): number {",
+              "    return 1;",
+              "  }",
+              "}",
+              "",
+              "export class Added {",
+              "  label = \"nuevo\";",
+              "",
+              "  run(): string {",
+              "    return this.label;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        }
+      ];
   }
 }
 

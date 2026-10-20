@@ -141,3 +141,60 @@ test("restaura la posición de los nodos al volver a un commit", async ({ page }
     expect(Math.abs(restored.y - moved.y)).toBeLessThanOrEqual(1);
   }).toPass({ timeout: 15_000 });
 });
+
+function colorChannels(value: string): [number, number, number] {
+  const legacy = /^rgba?\(([^)]+)\)/.exec(value);
+  if (legacy) {
+    const [red, green, blue] = legacy[1]!.split(",").map(Number);
+    return [red!, green!, blue!];
+  }
+  const srgb = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value);
+  if (srgb) {
+    return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255];
+  }
+  throw new Error(`Color inesperado: ${value}`);
+}
+
+function expectChannelDominance(color: string, dominant: "red" | "green"): void {
+  const [red, green, blue] = colorChannels(color);
+  if (dominant === "green") {
+    expect(green).toBeGreaterThan(red + 5);
+    expect(green).toBeGreaterThan(blue + 5);
+    return;
+  }
+  expect(red).toBeGreaterThan(green + 5);
+  expect(red).toBeGreaterThan(blue + 5);
+}
+
+test("tiñe los nodos añadidos y eliminados según el estado", async ({ page }) => {
+  await page.goto("/");
+  await importProject(page, fixture("diff-colors"));
+  await openProject(page, "diff-colors");
+  await page.getByLabel("Vista").selectOption("classes");
+  await expect(page.locator(".player-position")).toHaveText("1 / 2");
+
+  await page.getByRole("button", { name: "Siguiente →" }).click();
+  await expect(page.locator(".player-position")).toHaveText("2 / 2");
+
+  const canvas = page.getByLabel("Diagrama de classes");
+  const added = canvas.getByLabel("class Added");
+  await expect(added).toHaveClass(/change-added/);
+  await expect(added.locator(".uml-node-header .change-badge")).toHaveText("+");
+  const addedColors = await added.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderTopColor };
+  });
+  expectChannelDominance(addedColors.background, "green");
+  expectChannelDominance(addedColors.border, "green");
+
+  const removed = canvas.getByLabel("class Gone (eliminado)");
+  await expect(removed).toHaveClass(/change-removed/);
+  await expect(removed).toHaveClass(/ghost/);
+  await expect(removed.locator(".uml-node-header .change-badge")).toHaveText("−");
+  const removedColors = await removed.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderTopColor };
+  });
+  expectChannelDominance(removedColors.background, "red");
+  expectChannelDominance(removedColors.border, "red");
+});

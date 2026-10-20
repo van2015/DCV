@@ -8,7 +8,8 @@ const SCENARIOS: FixtureScenario[] = [
   "mixed",
   "monorepo",
   "broken",
-  "large"
+  "large",
+  "diff-colors"
 ];
 
 export async function createFixtureRepos(

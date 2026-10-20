@@ -142,4 +142,32 @@ describe("tarjetas de nodos UML", () => {
     expect(card).toHaveTextContent("3 módulos");
     expect(card).toHaveTextContent("src/domain");
   });
+
+  it("marca la caja de un nodo añadido y conserva la insignia", () => {
+    render(
+      <ClassNodeCard
+        data={{ kind: "class", declaration: declaration({ name: "Fresh" }), stereotype: "class" }}
+        change={{ status: "added", probable: false, kind: "class" }}
+      />
+    );
+
+    const card = screen.getByLabelText("class Fresh");
+    expect(card).toHaveClass("change-added");
+    expect(card.querySelector(".change-badge")).toHaveTextContent("+");
+  });
+
+  it("marca la caja de un fantasma eliminado y conserva la insignia", () => {
+    render(
+      <ClassNodeCard
+        data={{ kind: "class", declaration: declaration({ name: "Gone" }), stereotype: "class" }}
+        change={{ status: "removed", probable: false, kind: "class" }}
+        ghost
+      />
+    );
+
+    const card = screen.getByLabelText("class Gone (eliminado)");
+    expect(card).toHaveClass("change-removed");
+    expect(card).toHaveClass("ghost");
+    expect(card.querySelector(".change-badge")).toHaveTextContent("−");
+  });
 });
