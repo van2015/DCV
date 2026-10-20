@@ -69,7 +69,8 @@ const baseDiff: SnapshotDiff = {
       from: "module:src/util.ts",
       to: "module:src/new.ts",
       fromPath: "src/util.ts",
-      toPath: "src/new.ts"
+      toPath: "src/new.ts",
+      typeOnly: false
     }
   ]
 };

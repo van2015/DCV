@@ -807,6 +807,22 @@ button.danger {
   stroke-dasharray: 4 4;
 }
 
+.edge-added path,
+.edge-added {
+  stroke: #15803d;
+}
+
+.edge-removed path,
+.edge-removed {
+  stroke: #b91c1c;
+  stroke-dasharray: 6 4;
+}
+
+.edge-removed.type-only path,
+.edge-removed.type-only {
+  stroke-dasharray: 2 4;
+}
+
 .react-flow__node.focused .uml-node {
   outline: 2px solid #4f46e5;
   outline-offset: 2px;

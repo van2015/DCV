@@ -2,6 +2,8 @@ import type {
   ChangeStatus,
   DeclarationChange,
   DeclarationKind,
+  EdgeChange,
+  EdgeKind,
   MemberChange,
   SnapshotDiff
 } from "@dcv/shared";
@@ -43,11 +45,23 @@ export interface DiagramGhost {
   data: ClassNodeData | ModuleNodeData | PackageNodeData;
 }
 
+export type EdgeChangeStatus = "added" | "removed";
+
+export interface DiagramGhostEdge {
+  id: string;
+  kind: EdgeKind;
+  source: string;
+  target: string;
+  typeOnly: boolean;
+}
+
 export interface DiagramOverlay {
   nodeStatuses: Map<string, OverlayStatus>;
   declarationStatuses: Map<string, OverlayStatus>;
   memberStatuses: Map<string, Map<string, OverlayStatus>>;
+  edgeStatuses: Map<string, EdgeChangeStatus>;
   ghosts: DiagramGhost[];
+  ghostEdges: DiagramGhostEdge[];
 }
 
 export interface ChangeFilters {
@@ -80,7 +94,9 @@ export function buildOverlay(
     nodeStatuses: new Map(),
     declarationStatuses: new Map(),
     memberStatuses: new Map(),
-    ghosts: []
+    edgeStatuses: new Map(),
+    ghosts: [],
+    ghostEdges: []
   };
 
   for (const change of diff.declarations) {
@@ -114,6 +130,8 @@ export function buildOverlay(
   } else {
     applyPackageFileStatuses(overlay, projection, diff);
   }
+
+  applyEdgeChanges(overlay, projection, diff);
 
   return overlay;
 }
@@ -160,7 +178,130 @@ export function filterOverlay(
       )
   );
 
-  return { nodeStatuses, declarationStatuses, memberStatuses, ghosts };
+  return {
+    nodeStatuses,
+    declarationStatuses,
+    memberStatuses,
+    edgeStatuses: overlay.edgeStatuses,
+    ghosts,
+    ghostEdges: overlay.ghostEdges
+  };
+}
+
+function applyEdgeChanges(
+  overlay: DiagramOverlay,
+  projection: DiagramProjection,
+  diff: SnapshotDiff
+): void {
+  const visibleNodes = new Set(projection.nodes.map((node) => node.id));
+  const ghostNodes = new Set(overlay.ghosts.map((ghost) => ghost.id));
+  const resolve = (id: string): string | null => {
+    if (visibleNodes.has(id)) {
+      return id;
+    }
+    const ghostId = `ghost:${id}`;
+    return ghostNodes.has(ghostId) ? ghostId : null;
+  };
+
+  if (projection.view === "packages") {
+    applyPackageEdgeChanges(overlay, projection, diff, resolve);
+    return;
+  }
+
+  const projectionEdges = new Map(
+    projection.edges.map((edge) => [edgeKey(edge.kind, edge.source, edge.target), edge])
+  );
+
+  for (const change of diff.edges) {
+    if (change.status === "added") {
+      const edge = projectionEdges.get(edgeKey(change.kind, change.from, change.to));
+      if (edge !== undefined) {
+        overlay.edgeStatuses.set(edge.id, "added");
+      }
+      continue;
+    }
+
+    if (projection.view === "classes" && change.kind === "imports") {
+      continue;
+    }
+
+    const source = resolve(change.from);
+    const target = resolve(change.to);
+    if (source === null || target === null) {
+      continue;
+    }
+    overlay.ghostEdges.push({
+      id: `ghost-edge:${change.kind}:${source}->${target}`,
+      kind: change.kind,
+      source,
+      target,
+      typeOnly: change.typeOnly
+    });
+  }
+}
+
+function applyPackageEdgeChanges(
+  overlay: DiagramOverlay,
+  projection: DiagramProjection,
+  diff: SnapshotDiff,
+  resolve: (id: string) => string | null
+): void {
+  const projectionEdges = new Map(
+    projection.edges.map((edge) => [edgeKey(edge.kind, edge.source, edge.target), edge])
+  );
+  const removedByPair = new Map<string, EdgeChange[]>();
+
+  for (const change of diff.edges) {
+    if (change.kind !== "imports") {
+      continue;
+    }
+    const fromDir = directoryOf(change.fromPath);
+    const toDir = directoryOf(change.toPath);
+    if (fromDir === toDir) {
+      continue;
+    }
+    const key = edgeKey(change.kind, `package:${fromDir}`, `package:${toDir}`);
+
+    if (change.status === "added") {
+      const edge = projectionEdges.get(key);
+      if (edge !== undefined) {
+        overlay.edgeStatuses.set(edge.id, "added");
+      }
+      continue;
+    }
+
+    const changes = removedByPair.get(key) ?? [];
+    changes.push(change);
+    removedByPair.set(key, changes);
+  }
+
+  for (const [key, changes] of removedByPair) {
+    if (projectionEdges.has(key)) {
+      continue;
+    }
+    const [kind, rawSource, rawTarget] = parseEdgeKey(key);
+    const source = resolve(rawSource);
+    const target = resolve(rawTarget);
+    if (source === null || target === null) {
+      continue;
+    }
+    overlay.ghostEdges.push({
+      id: `ghost-edge:${key}`,
+      kind,
+      source,
+      target,
+      typeOnly: changes.every((change) => change.typeOnly)
+    });
+  }
+}
+
+function edgeKey(kind: EdgeKind, source: string, target: string): string {
+  return `${kind}|${source}|${target}`;
+}
+
+function parseEdgeKey(key: string): [EdgeKind, string, string] {
+  const [kind, source, target] = key.split("|");
+  return [kind as EdgeKind, source!, target!];
 }
 
 function classGhosts(diff: SnapshotDiff): DiagramGhost[] {

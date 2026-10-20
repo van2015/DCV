@@ -411,18 +411,54 @@ function buildFlow(
   }
 
   const included = new Set(nodes.map((node) => node.id));
-  const edges: FlowEdge[] = projection.edges
-    .filter((edge) => included.has(edge.source) && included.has(edge.target))
-    .map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-      className: `edge-${edge.kind}${edge.typeOnly ? " type-only" : ""}`
-    }));
+  const edges = buildFlowEdges(projection, overlay, included);
 
   return { nodes, edges, visibleIds, hiddenIds };
 }
+
+export function buildFlowEdges(
+  projection: DiagramProjection,
+  overlay: DiagramOverlay | null,
+  included: ReadonlySet<string>
+): FlowEdge[] {
+  const candidates: {
+    edge: DiagramProjection["edges"][number] | NonNullable<DiagramOverlay>["ghostEdges"][number];
+    status: "added" | "removed" | null;
+  }[] = [
+    ...projection.edges.map((edge) => ({
+      edge,
+      status: overlay?.edgeStatuses.get(edge.id) ?? null
+    })),
+    ...(overlay?.ghostEdges ?? []).map((edge) => ({
+      edge,
+      status: "removed" as const
+    }))
+  ];
+  return candidates
+    .filter(({ edge }) => included.has(edge.source) && included.has(edge.target))
+    .map(({ edge, status }) => {
+      const color = status === null ? null : EDGE_STATUS_COLORS[status];
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 14,
+          height: 14,
+          ...(color === null ? {} : { color })
+        },
+        className: `edge-${edge.kind}${edge.typeOnly ? " type-only" : ""}${
+          status === null ? "" : ` edge-${status}`
+        }`
+      };
+    });
+}
+
+const EDGE_STATUS_COLORS = {
+  added: "#15803d",
+  removed: "#b91c1c"
+} as const;
 
 function graphFolderIds(graph: LayoutGraph): string[] {
   const ids: string[] = [];

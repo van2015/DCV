@@ -237,6 +237,7 @@ export interface EdgeChange {
   to: string;
   fromPath: string;
   toPath: string;
+  typeOnly: boolean;
 }
 
 export interface SnapshotDiff {

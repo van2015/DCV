@@ -8,7 +8,7 @@ import type {
   SnapshotEdge,
   SnapshotFile
 } from "@dcv/shared";
-import { DiagramCanvas, type CanvasLayoutInfo } from "./DiagramCanvas.js";
+import { DiagramCanvas, buildFlowEdges, type CanvasLayoutInfo } from "./DiagramCanvas.js";
 import { buildOverlay } from "./overlay.js";
 import { projectSnapshot } from "./projection.js";
 import type { LayoutGraph, LayoutGraphNode } from "./layout/graph.js";
@@ -505,6 +505,87 @@ describe("DiagramCanvas", () => {
       y: 125
     });
     expect(store.loadPositions("classes")).toEqual(legacy);
+  });
+
+  it("renderiza aristas añadidas y eliminadas con su estado", async () => {
+    const a = declaration("src/a.ts", "class", "A");
+    const b = declaration("src/b.ts", "class", "B");
+    const old = declaration("src/old.ts", "class", "Old");
+    const added: SnapshotEdge = {
+      id: "edge-added",
+      kind: "extends",
+      from: a.id,
+      to: b.id,
+      fromPath: "src/a.ts",
+      toPath: "src/b.ts",
+      typeOnly: false
+    };
+    const model = snapshot([file("src/a.ts", [a]), file("src/b.ts", [b])], [added]);
+    const projection = projectSnapshot(model, "classes");
+    const { id: _oldId, path: _oldPath, ...oldModel } = old;
+    const diff: SnapshotDiff = {
+      from: "c0",
+      to: "c1",
+      isEmpty: false,
+      files: [{ status: "removed", path: "src/old.ts", previousPath: null, probable: false }],
+      declarations: [
+        {
+          status: "removed",
+          id: old.id,
+          previousId: old.id,
+          kind: "class",
+          name: "Old",
+          path: "src/old.ts",
+          previousPath: "src/old.ts",
+          probable: false,
+          declaration: null,
+          previousDeclaration: oldModel
+        }
+      ],
+      members: [],
+      edges: [
+        {
+          status: "added",
+          kind: "extends",
+          from: a.id,
+          to: b.id,
+          fromPath: "src/a.ts",
+          toPath: "src/b.ts",
+          typeOnly: false
+        },
+        {
+          status: "removed",
+          kind: "association",
+          from: b.id,
+          to: old.id,
+          fromPath: "src/b.ts",
+          toPath: "src/old.ts",
+          typeOnly: true
+        }
+      ]
+    };
+    const overlay = buildOverlay(projection, diff);
+    const included = new Set([
+      ...projection.nodes.map((node) => node.id),
+      ...overlay.ghosts.map((ghost) => ghost.id)
+    ]);
+    const edges = buildFlowEdges(projection, overlay, included);
+
+    expect(edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "edge-added",
+          className: "edge-extends edge-added",
+          markerEnd: expect.objectContaining({ color: "#15803d" })
+        }),
+        expect.objectContaining({
+          id: `ghost-edge:association:${b.id}->ghost:${old.id}`,
+          className: "edge-association type-only edge-removed",
+          markerEnd: expect.objectContaining({ color: "#b91c1c" })
+        })
+      ])
+    );
+    expect(edges).toHaveLength(2);
   });
 
   it("re-layout reemplaza solo las posiciones del commit actual", async () => {

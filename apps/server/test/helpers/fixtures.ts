@@ -9,7 +9,8 @@ export type FixtureScenario =
   | "monorepo"
   | "broken"
   | "large"
-  | "diff-colors";
+  | "diff-colors"
+  | "edge-colors";
 
 export interface FixtureCommit {
   sha: string;
@@ -393,6 +394,52 @@ function scenarioCommits(scenario: FixtureScenario): CommitSpec[] {
               ""
             ].join("\n")
           }
+        }
+      ];
+    case "edge-colors":
+      return [
+        {
+          message: "relaciones iniciales",
+          files: {
+            "src/base.ts": [
+              "export class Base {",
+              "  id(): string {",
+              "    return \"base\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/legacy.ts": [
+              "import { Base } from \"./base\";",
+              "",
+              "export class Gone extends Base {",
+              "  label = \"viejo\";",
+              "",
+              "  run(): number {",
+              "    return 1;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "elimina relaciones antiguas y agrega nuevas",
+          files: {
+            "src/added.ts": [
+              "import { Base } from \"./base\";",
+              "",
+              "export class Added extends Base {",
+              "  step = 2;",
+              "",
+              "  next(): string {",
+              "    return \"added\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          },
+          remove: ["src/legacy.ts"]
         }
       ];
   }

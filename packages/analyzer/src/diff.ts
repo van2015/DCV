@@ -403,7 +403,8 @@ function diffEdges(
         from: edge.from,
         to: edge.to,
         fromPath: edge.fromPath,
-        toPath: edge.toPath
+        toPath: edge.toPath,
+        typeOnly: edge.typeOnly
       });
     }
   }
@@ -416,7 +417,8 @@ function diffEdges(
         from: edge.from,
         to: edge.to,
         fromPath: edge.fromPath,
-        toPath: edge.toPath
+        toPath: edge.toPath,
+        typeOnly: edge.typeOnly
       });
     }
   }

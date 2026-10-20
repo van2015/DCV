@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { basename, resolve } from "node:path";
 
 function fixture(name: string): string {
@@ -141,6 +141,49 @@ test("restaura la posición de los nodos al volver a un commit", async ({ page }
     expect(Math.abs(restored.y - moved.y)).toBeLessThanOrEqual(1);
   }).toPass({ timeout: 15_000 });
 });
+
+test("colorea las relaciones añadidas y eliminadas en clases y módulos", async ({
+  page
+}) => {
+  await page.goto("/");
+  await importProject(page, fixture("edge-colors"));
+  await openProject(page, "edge-colors");
+  await page.getByLabel("Vista").selectOption("classes");
+  await expect(page.locator(".player-position")).toHaveText("1 / 2");
+
+  await page.getByRole("button", { name: "Siguiente →" }).click();
+  await expect(page.locator(".player-position")).toHaveText("2 / 2");
+
+  const classes = page.getByLabel("Diagrama de classes");
+  const addedClassEdge = classes.locator(".react-flow__edge.edge-added.edge-extends");
+  const removedClassEdge = classes.locator(".react-flow__edge.edge-removed.edge-extends");
+  await expect(addedClassEdge).toHaveCount(1);
+  await expect(removedClassEdge).toHaveCount(1);
+  expectChannelDominance(await strokeOf(addedClassEdge), "green");
+  expectChannelDominance(await strokeOf(removedClassEdge), "red");
+
+  await page.getByLabel("Vista").selectOption("modules");
+  const modules = page.getByLabel("Diagrama de modules");
+  const addedModuleEdge = modules.locator(".react-flow__edge.edge-added.edge-imports");
+  const removedModuleEdge = modules.locator(".react-flow__edge.edge-removed.edge-imports");
+  await expect(addedModuleEdge).toHaveCount(1);
+  await expect(removedModuleEdge).toHaveCount(1);
+  expectChannelDominance(await strokeOf(addedModuleEdge), "green");
+  expectChannelDominance(await strokeOf(removedModuleEdge), "red");
+
+  await page.getByRole("button", { name: "← Anterior" }).click();
+  await expect(page.locator(".player-position")).toHaveText("1 / 2");
+  await expect(classes.locator(".react-flow__edge.edge-added")).toHaveCount(0);
+  await expect(classes.locator(".react-flow__edge.edge-removed")).toHaveCount(0);
+  await expect(modules.locator(".react-flow__edge.edge-added")).toHaveCount(0);
+  await expect(modules.locator(".react-flow__edge.edge-removed")).toHaveCount(0);
+});
+
+async function strokeOf(edge: Locator): Promise<string> {
+  return edge
+    .locator(".react-flow__edge-path")
+    .evaluate((element) => getComputedStyle(element).stroke);
+}
 
 function colorChannels(value: string): [number, number, number] {
   const legacy = /^rgba?\(([^)]+)\)/.exec(value);

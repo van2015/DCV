@@ -425,18 +425,18 @@ describe("diffSnapshots", () => {
     expect(untouched.members).toEqual([]);
   });
 
-  it("clasifica aristas añadidas y eliminadas", () => {
-    const edge = (from: string, to: string): SnapshotEdge => ({
+  it("clasifica aristas añadidas y eliminadas conservando solo tipo", () => {
+    const edge = (from: string, to: string, typeOnly = false): SnapshotEdge => ({
       id: `${from}->association->${to}`,
       kind: "association",
       from,
       to,
       fromPath: "src/a.ts",
       toPath: "src/b.ts",
-      typeOnly: false
+      typeOnly
     });
     const classes = (withEdge: boolean): SnapshotEdge[] =>
-      withEdge ? [edge("src/a.ts#class:A", "src/b.ts#class:B")] : [];
+      withEdge ? [edge("src/a.ts#class:A", "src/b.ts#class:B", true)] : [];
     const previous = snapshot("1", [
       file("src/a.ts", "a1", [declaration({ kind: "class", name: "A" })]),
       file("src/b.ts", "b1", [declaration({ kind: "class", name: "B" })])
@@ -455,7 +455,8 @@ describe("diffSnapshots", () => {
         from: "src/a.ts#class:A",
         to: "src/b.ts#class:B",
         fromPath: "src/a.ts",
-        toPath: "src/b.ts"
+        toPath: "src/b.ts",
+        typeOnly: true
       }
     ]);
     expect(diff.files).toHaveLength(2);
