@@ -409,6 +409,28 @@ function scenarioCommits(scenario: FixtureScenario): CommitSpec[] {
               "}",
               ""
             ].join("\n"),
+            "src/stable.ts": [
+              "import { Base } from \"./base\";",
+              "",
+              "export interface Contract {",
+              "  run(): string;",
+              "}",
+              "",
+              "export class Stable extends Base implements Contract {",
+              "  run(): string {",
+              "    return \"stable\";",
+              "  }",
+              "}",
+              "",
+              "export class Holder {",
+              "  item: Base;",
+              "",
+              "  constructor(item: Base) {",
+              "    this.item = item;",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
             "src/legacy.ts": [
               "import { Base } from \"./base\";",
               "",

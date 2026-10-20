@@ -7,7 +7,7 @@ Visor local de la evolución arquitectónica de proyectos TypeScript. Importa un
 - Importación de repositorios locales o públicos por URL (clon desnudo en segundo plano), selección de rama y actualización del histórico con `fetch`.
 - Reproductor de histórico de más antiguo a más reciente: botones `← Anterior` / `Siguiente →`, metadatos del commit y avisos de "Línea base del histórico" o "Sin cambios estructurales de TypeScript en este commit".
 - Tres vistas sobre el mismo modelo: **Clases**, **Módulos** y **Paquetes**; las carpetas se dibujan como contenedores colapsables.
-- Superposición de diferencias con marcadores: `+` añadido, `−` eliminado, `~` modificado, `≈` solo cuerpo, `→` movido, `↻` renombrado; los nodos y relaciones añadidos se tiñen de verde, los eliminados de rojo (con aristas fantasma) y los elementos eliminados se muestran como nodos fantasma.
+- Superposición de diferencias con marcadores: `+` añadido, `−` eliminado, `~` modificado, `≈` solo cuerpo, `→` movido, `↻` renombrado; los nodos se tiñen de verde/rojo y las relaciones añadidas/eliminadas usan esos mismos colores con aristas fantasma. Las relaciones sin cambios son monocromas con estilo UML: herencia continua e implementación discontinua con triángulo hueco blanco, asociación e importación continuas con punta rellena; las de solo tipo mantienen línea discontinua.
 - Panel de cambios agrupado por estado, con filtros (implementación, miembros, tipos) y salto directo al nodo afectado.
 - Layout incremental con ELK ejecutado en un Web Worker (con fallback en proceso), posiciones persistidas por commit, proyecto y vista (con herencia desde el commit más cercano y poda LRU de 50), cámara y controles por proyecto y vista, y botón `Re-layout`.
 - Modo foco con profundidad de 1 a 3 saltos (se activa a partir de 40 nodos) y opción de ocultar el resto.
@@ -131,8 +131,8 @@ Fuera del alcance de la versión actual: repositorios privados por URL, otros le
 
 ## Estado del proyecto
 
-Los cambios `add-uml-history-viewer` (58/58 tareas), `save-commit-diagram-positions` (11/11 tareas), `add-node-change-colors` (8/8 tareas) y `add-edge-change-colors` (10/10 tareas) están completos. La verificación incluye:
+Los cambios `add-uml-history-viewer` (58/58 tareas), `save-commit-diagram-positions` (11/11 tareas), `add-node-change-colors` (8/8 tareas), `add-edge-change-colors` (10/10 tareas) y `use-uml-edge-styles` (9/9 tareas) están completos. La verificación incluye:
 
-- `pnpm test`: 198 pruebas (shared 5, analyzer 36, web 90, server 67).
-- `pnpm e2e`: 5 pruebas Playwright (importación, navegación, cambio de vista, foco, persistencia de cámara, restauración de posiciones por commit, tinte de nodos y colores de relaciones añadidas/eliminadas).
+- `pnpm test`: 205 pruebas (shared 5, analyzer 36, web 97, server 67).
+- `pnpm e2e`: 5 pruebas Playwright (importación, navegación, cambio de vista, foco, persistencia de cámara, restauración de posiciones por commit, tinte de nodos y estilos UML/colores de relaciones).
 - `pnpm benchmark`: en un repositorio sintético de 100 archivos y 800 clases, snapshot en frío de 263.6 ms, con cache 42.7 ms (x6.2), diff 8.2 ms y layout ELK de 216 ms; el umbral de foco de 40 nodos y la cache por blob quedan validados con estos datos.

@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Background,
+  BaseEdge,
   Controls as FlowControls,
   Handle,
-  MarkerType,
   Position,
   ReactFlow,
+  getBezierPath,
   type Edge as FlowEdge,
+  type EdgeProps,
   type Node as FlowNode,
   type NodeProps
 } from "@xyflow/react";
@@ -25,6 +27,7 @@ import { resolveCommitPositions } from "./layout/inheritance.js";
 import { reconcileLayout } from "./layout/reconcile.js";
 import { VisualStateStore, type VisualControls } from "./layout/persistence.js";
 import type { LayoutPositions } from "./layout/types.js";
+import { edgeAppearance, type EdgeAppearance } from "./edgeStyle.js";
 
 export interface CanvasLeafData {
   node: DiagramNode;
@@ -197,6 +200,7 @@ export function DiagramCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         fitView={!savedCamera}
         defaultViewport={savedCamera ?? undefined}
         minZoom={0.1}
@@ -295,6 +299,72 @@ const NODE_TYPES = {
   module: ModuleFlowView,
   package: PackageFlowView,
   folder: FolderFlowView
+};
+
+const FALLBACK_EDGE_APPEARANCE = edgeAppearance("imports", null, false);
+
+function UmlEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  style
+}: EdgeProps) {
+  const markerSuffix = useId().replaceAll(":", "");
+  const markerId = `uml-marker-${markerSuffix}`;
+  const appearance =
+    (data as { appearance?: EdgeAppearance } | undefined)?.appearance ??
+    FALLBACK_EDGE_APPEARANCE;
+  const [path] = getBezierPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition
+  });
+  const hollow = appearance.markerShape === "hollow-triangle";
+
+  return (
+    <>
+      <defs>
+        <marker
+          id={markerId}
+          data-edge-id={id}
+          data-marker-shape={appearance.markerShape}
+          data-marker-color={appearance.color}
+          viewBox="-10 -10 20 20"
+          markerWidth={14}
+          markerHeight={14}
+          refX={0}
+          refY={0}
+          markerUnits="strokeWidth"
+          orient="auto-start-reverse"
+        >
+          <path
+            d="M -9,-6 L 0,0 L -9,6 Z"
+            fill={hollow ? "#ffffff" : appearance.color}
+            stroke={appearance.color}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+          />
+        </marker>
+      </defs>
+      <BaseEdge
+        path={path}
+        markerEnd={`url(#${markerId})`}
+        style={style}
+      />
+    </>
+  );
+}
+
+const EDGE_TYPES = {
+  uml: UmlEdge
 };
 
 interface VisibilityInput {
@@ -437,28 +507,19 @@ export function buildFlowEdges(
   return candidates
     .filter(({ edge }) => included.has(edge.source) && included.has(edge.target))
     .map(({ edge, status }) => {
-      const color = status === null ? null : EDGE_STATUS_COLORS[status];
+      const appearance = edgeAppearance(edge.kind, status, edge.typeOnly);
       return {
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 14,
-          height: 14,
-          ...(color === null ? {} : { color })
-        },
+        type: "uml",
+        data: { appearance },
         className: `edge-${edge.kind}${edge.typeOnly ? " type-only" : ""}${
-          status === null ? "" : ` edge-${status}`
+          appearance.statusClass === null ? "" : ` ${appearance.statusClass}`
         }`
       };
     });
 }
-
-const EDGE_STATUS_COLORS = {
-  added: "#15803d",
-  removed: "#b91c1c"
-} as const;
 
 function graphFolderIds(graph: LayoutGraph): string[] {
   const ids: string[] = [];

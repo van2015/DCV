@@ -142,7 +142,7 @@ test("restaura la posición de los nodos al volver a un commit", async ({ page }
   }).toPass({ timeout: 15_000 });
 });
 
-test("colorea las relaciones añadidas y eliminadas en clases y módulos", async ({
+test("aplica estilos UML base y colorea las relaciones modificadas", async ({
   page
 }) => {
   await page.goto("/");
@@ -155,21 +155,101 @@ test("colorea las relaciones añadidas y eliminadas en clases y módulos", async
   await expect(page.locator(".player-position")).toHaveText("2 / 2");
 
   const classes = page.getByLabel("Diagrama de classes");
+  const stableInheritance = classes.locator(
+    ".react-flow__edge.edge-extends:not(.edge-added):not(.edge-removed)"
+  );
+  const stableImplementation = classes.locator(
+    ".react-flow__edge.edge-implements:not(.edge-added):not(.edge-removed)"
+  );
+  const stableAssociation = classes.locator(
+    ".react-flow__edge.edge-association:not(.edge-added):not(.edge-removed)"
+  );
   const addedClassEdge = classes.locator(".react-flow__edge.edge-added.edge-extends");
   const removedClassEdge = classes.locator(".react-flow__edge.edge-removed.edge-extends");
+
+  await expect(stableInheritance).toHaveCount(1);
+  await expect(stableImplementation).toHaveCount(1);
+  await expect(stableAssociation).toHaveCount(1);
   await expect(addedClassEdge).toHaveCount(1);
   await expect(removedClassEdge).toHaveCount(1);
+
+  expectBlack(await strokeOf(stableInheritance));
+  expect(await dashOf(stableInheritance)).toBe("none");
+  expect(await markerOf(stableInheritance)).toEqual({
+    shape: "hollow-triangle",
+    color: "#111111",
+    fill: "rgb(255, 255, 255)",
+    stroke: "rgb(17, 17, 17)"
+  });
+
+  expectBlack(await strokeOf(stableImplementation));
+  expect(await dashOf(stableImplementation)).toMatch(/6px[,\s]+4px/);
+  expect(await markerOf(stableImplementation)).toEqual({
+    shape: "hollow-triangle",
+    color: "#111111",
+    fill: "rgb(255, 255, 255)",
+    stroke: "rgb(17, 17, 17)"
+  });
+
+  expectBlack(await strokeOf(stableAssociation));
+  expect(await dashOf(stableAssociation)).toBe("none");
+  expect(await markerOf(stableAssociation)).toEqual({
+    shape: "filled-triangle",
+    color: "#111111",
+    fill: "rgb(17, 17, 17)",
+    stroke: "rgb(17, 17, 17)"
+  });
+
   expectChannelDominance(await strokeOf(addedClassEdge), "green");
   expectChannelDominance(await strokeOf(removedClassEdge), "red");
+  expect(await dashOf(removedClassEdge)).toBe("none");
+  expect(await markerOf(addedClassEdge)).toEqual({
+    shape: "hollow-triangle",
+    color: "#15803d",
+    fill: "rgb(255, 255, 255)",
+    stroke: "rgb(21, 128, 61)"
+  });
+  expect(await markerOf(removedClassEdge)).toEqual({
+    shape: "hollow-triangle",
+    color: "#b91c1c",
+    fill: "rgb(255, 255, 255)",
+    stroke: "rgb(185, 28, 28)"
+  });
 
   await page.getByLabel("Vista").selectOption("modules");
   const modules = page.getByLabel("Diagrama de modules");
+  const stableModuleEdge = modules.locator(
+    ".react-flow__edge.edge-imports:not(.edge-added):not(.edge-removed)"
+  );
   const addedModuleEdge = modules.locator(".react-flow__edge.edge-added.edge-imports");
   const removedModuleEdge = modules.locator(".react-flow__edge.edge-removed.edge-imports");
+  await expect(stableModuleEdge).toHaveCount(1);
   await expect(addedModuleEdge).toHaveCount(1);
   await expect(removedModuleEdge).toHaveCount(1);
+
+  expectBlack(await strokeOf(stableModuleEdge));
+  expect(await dashOf(stableModuleEdge)).toBe("none");
+  expect(await markerOf(stableModuleEdge)).toEqual({
+    shape: "filled-triangle",
+    color: "#111111",
+    fill: "rgb(17, 17, 17)",
+    stroke: "rgb(17, 17, 17)"
+  });
+
   expectChannelDominance(await strokeOf(addedModuleEdge), "green");
   expectChannelDominance(await strokeOf(removedModuleEdge), "red");
+  expect(await markerOf(addedModuleEdge)).toEqual({
+    shape: "filled-triangle",
+    color: "#15803d",
+    fill: "rgb(21, 128, 61)",
+    stroke: "rgb(21, 128, 61)"
+  });
+  expect(await markerOf(removedModuleEdge)).toEqual({
+    shape: "filled-triangle",
+    color: "#b91c1c",
+    fill: "rgb(185, 28, 28)",
+    stroke: "rgb(185, 28, 28)"
+  });
 
   await page.getByRole("button", { name: "← Anterior" }).click();
   await expect(page.locator(".player-position")).toHaveText("1 / 2");
@@ -185,6 +265,29 @@ async function strokeOf(edge: Locator): Promise<string> {
     .evaluate((element) => getComputedStyle(element).stroke);
 }
 
+async function dashOf(edge: Locator): Promise<string> {
+  return edge
+    .locator(".react-flow__edge-path")
+    .evaluate((element) => getComputedStyle(element).strokeDasharray);
+}
+
+async function markerOf(
+  edge: Locator
+): Promise<{ shape: string | null; color: string | null; fill: string; stroke: string }> {
+  const marker = edge.locator("marker");
+  await expect(marker).toHaveCount(1);
+  const path = marker.locator("path");
+  const style = await path.evaluate((element) => {
+    const computed = getComputedStyle(element);
+    return { fill: computed.fill, stroke: computed.stroke };
+  });
+  return {
+    shape: await marker.getAttribute("data-marker-shape"),
+    color: await marker.getAttribute("data-marker-color"),
+    ...style
+  };
+}
+
 function colorChannels(value: string): [number, number, number] {
   const legacy = /^rgba?\(([^)]+)\)/.exec(value);
   if (legacy) {
@@ -196,6 +299,13 @@ function colorChannels(value: string): [number, number, number] {
     return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255];
   }
   throw new Error(`Color inesperado: ${value}`);
+}
+
+function expectBlack(color: string): void {
+  const [red, green, blue] = colorChannels(color);
+  expect(red).toBeLessThan(32);
+  expect(green).toBeLessThan(32);
+  expect(blue).toBeLessThan(32);
 }
 
 function expectChannelDominance(color: string, dominant: "red" | "green"): void {

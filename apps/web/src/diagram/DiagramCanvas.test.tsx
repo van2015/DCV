@@ -575,17 +575,231 @@ describe("DiagramCanvas", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "edge-added",
+          type: "uml",
           className: "edge-extends edge-added",
-          markerEnd: expect.objectContaining({ color: "#15803d" })
+          data: {
+            appearance: expect.objectContaining({
+              color: "#15803d",
+              markerShape: "hollow-triangle",
+              linePattern: "solid"
+            })
+          }
         }),
         expect.objectContaining({
           id: `ghost-edge:association:${b.id}->ghost:${old.id}`,
+          type: "uml",
           className: "edge-association type-only edge-removed",
-          markerEnd: expect.objectContaining({ color: "#b91c1c" })
+          data: {
+            appearance: expect.objectContaining({
+              color: "#b91c1c",
+              markerShape: "filled-triangle",
+              linePattern: "4 4"
+            })
+          }
         })
       ])
     );
     expect(edges).toHaveLength(2);
+  });
+
+  it("compone estilos UML base y de diff en aristas de clase", () => {
+    const a = declaration("src/a.ts", "class", "A");
+    const b = declaration("src/b.ts", "class", "B");
+    const c = declaration("src/c.ts", "class", "C");
+    const edges: SnapshotEdge[] = [
+      {
+        id: "extends-unchanged",
+        kind: "extends",
+        from: a.id,
+        to: b.id,
+        fromPath: "src/a.ts",
+        toPath: "src/b.ts",
+        typeOnly: false
+      },
+      {
+        id: "implements-added",
+        kind: "implements",
+        from: a.id,
+        to: c.id,
+        fromPath: "src/a.ts",
+        toPath: "src/c.ts",
+        typeOnly: false
+      },
+      {
+        id: "association-unchanged",
+        kind: "association",
+        from: b.id,
+        to: c.id,
+        fromPath: "src/b.ts",
+        toPath: "src/c.ts",
+        typeOnly: false
+      },
+      {
+        id: "association-type-only",
+        kind: "association",
+        from: c.id,
+        to: a.id,
+        fromPath: "src/c.ts",
+        toPath: "src/a.ts",
+        typeOnly: true
+      }
+    ];
+    const model = snapshot(
+      [file("src/a.ts", [a]), file("src/b.ts", [b]), file("src/c.ts", [c])],
+      edges
+    );
+    const projection = projectSnapshot(model, "classes");
+    const diff: SnapshotDiff = {
+      from: "c0",
+      to: "c1",
+      isEmpty: false,
+      files: [],
+      declarations: [],
+      members: [],
+      edges: [
+        {
+          status: "added",
+          kind: "implements",
+          from: a.id,
+          to: c.id,
+          fromPath: "src/a.ts",
+          toPath: "src/c.ts",
+          typeOnly: false
+        },
+        {
+          status: "removed",
+          kind: "association",
+          from: a.id,
+          to: b.id,
+          fromPath: "src/a.ts",
+          toPath: "src/b.ts",
+          typeOnly: false
+        }
+      ]
+    };
+    const overlay = buildOverlay(projection, diff);
+    const included = new Set(projection.nodes.map((node) => node.id));
+    const flowEdges = buildFlowEdges(projection, overlay, included);
+    const byId = new Map(flowEdges.map((edge) => [edge.id, edge]));
+
+    expect(byId.get("extends-unchanged")).toMatchObject({
+      type: "uml",
+      className: "edge-extends",
+      data: {
+        appearance: {
+          color: "#111111",
+          markerShape: "hollow-triangle",
+          linePattern: "solid",
+          statusClass: null
+        }
+      }
+    });
+    expect(byId.get("implements-added")).toMatchObject({
+      className: "edge-implements edge-added",
+      data: {
+        appearance: {
+          color: "#15803d",
+          markerShape: "hollow-triangle",
+          linePattern: "6 4"
+        }
+      }
+    });
+    expect(byId.get("association-unchanged")).toMatchObject({
+      className: "edge-association",
+      data: {
+        appearance: {
+          color: "#111111",
+          markerShape: "filled-triangle",
+          linePattern: "solid"
+        }
+      }
+    });
+    expect(byId.get("association-type-only")).toMatchObject({
+      className: "edge-association type-only",
+      data: {
+        appearance: {
+          color: "#111111",
+          linePattern: "4 4"
+        }
+      }
+    });
+    expect(byId.get(`ghost-edge:association:${a.id}->${b.id}`)).toMatchObject({
+      className: "edge-association edge-removed",
+      data: {
+        appearance: {
+          color: "#b91c1c",
+          markerShape: "filled-triangle",
+          linePattern: "solid"
+        }
+      }
+    });
+  });
+
+  it("compone importaciones UML sin cambios y de solo tipo", () => {
+    const a = declaration("src/a.ts", "class", "A");
+    const b = declaration("src/b.ts", "class", "B");
+    const model = snapshot(
+      [file("src/a.ts", [a]), file("src/b.ts", [b])],
+      [
+        {
+          id: "imports-unchanged",
+          kind: "imports",
+          from: a.id,
+          to: b.id,
+          fromPath: "src/a.ts",
+          toPath: "src/b.ts",
+          typeOnly: false
+        },
+        {
+          id: "imports-type-only",
+          kind: "imports",
+          from: b.id,
+          to: a.id,
+          fromPath: "src/b.ts",
+          toPath: "src/a.ts",
+          typeOnly: true
+        }
+      ]
+    );
+    const projection = projectSnapshot(model, "modules");
+    const overlay = buildOverlay(projection, {
+      from: "c0",
+      to: "c1",
+      isEmpty: true,
+      files: [],
+      declarations: [],
+      members: [],
+      edges: []
+    });
+    const included = new Set(projection.nodes.map((node) => node.id));
+    const flowEdges = buildFlowEdges(projection, overlay, included);
+
+    expect(flowEdges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "imports-unchanged",
+          className: "edge-imports",
+          data: {
+            appearance: expect.objectContaining({
+              color: "#111111",
+              markerShape: "filled-triangle",
+              linePattern: "solid"
+            })
+          }
+        }),
+        expect.objectContaining({
+          id: "imports-type-only",
+          className: "edge-imports type-only",
+          data: {
+            appearance: expect.objectContaining({
+              color: "#111111",
+              markerShape: "filled-triangle",
+              linePattern: "4 4"
+            })
+          }
+        })
+      ])
+    );
   });
 
   it("re-layout reemplaza solo las posiciones del commit actual", async () => {

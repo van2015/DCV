@@ -781,46 +781,27 @@ button.danger {
   font-size: 0.7rem;
 }
 
-.edge-imports path,
-.edge-imports {
-  stroke: #6b7280;
+.edge-imports .react-flow__edge-path,
+.edge-extends .react-flow__edge-path,
+.edge-association .react-flow__edge-path {
+  stroke: #111111;
 }
 
-.edge-extends path,
-.edge-extends {
-  stroke: #2563eb;
-}
-
-.edge-implements path,
-.edge-implements {
-  stroke: #16a34a;
+.edge-implements .react-flow__edge-path {
+  stroke: #111111;
   stroke-dasharray: 6 4;
 }
 
-.edge-association path,
-.edge-association {
-  stroke: #db2777;
-}
-
-.type-only path,
-.type-only {
+.type-only .react-flow__edge-path {
   stroke-dasharray: 4 4;
 }
 
-.edge-added path,
-.edge-added {
+.edge-added .react-flow__edge-path {
   stroke: #15803d;
 }
 
-.edge-removed path,
-.edge-removed {
+.edge-removed .react-flow__edge-path {
   stroke: #b91c1c;
-  stroke-dasharray: 6 4;
-}
-
-.edge-removed.type-only path,
-.edge-removed.type-only {
-  stroke-dasharray: 2 4;
 }
 
 .react-flow__node.focused .uml-node {
