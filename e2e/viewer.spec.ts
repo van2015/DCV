@@ -88,3 +88,56 @@ test("enfoca nodos y persiste la cámara entre recargas", async ({ page }) => {
     expect(after).toBe(before);
   }).toPass({ timeout: 15_000 });
 });
+
+function translateOf(transform: string): { x: number; y: number } {
+  const match = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(transform);
+  if (!match) {
+    throw new Error(`Transform inesperado: ${transform}`);
+  }
+  return { x: Number(match[1]), y: Number(match[2]) };
+}
+
+test("restaura la posición de los nodos al volver a un commit", async ({ page }) => {
+  await page.goto("/");
+  await importProject(page, fixture("functional"));
+  await openProject(page, "functional");
+  await page.getByLabel("Vista").selectOption("modules");
+  await page.getByRole("button", { name: "Siguiente →" }).click();
+  await expect(page.locator(".player-position")).toHaveText("2 / 3");
+
+  const canvas = page.getByLabel("Diagrama de modules");
+  const node = canvas.locator('.react-flow__node[data-id="module:src/app.ts"]');
+  await expect(node).toBeVisible();
+  const readTransform = () =>
+    node.evaluate((element) => (element as HTMLElement).style.transform);
+  const before = translateOf(await readTransform());
+
+  const box = await node.boundingBox();
+  if (!box) {
+    throw new Error("El nodo no tiene dimensiones visibles.");
+  }
+  const startX = box.x + 30;
+  const startY = box.y + 16;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 140, startY + 90, { steps: 12 });
+  await page.mouse.up();
+
+  let moved = before;
+  await expect(async () => {
+    moved = translateOf(await readTransform());
+    expect(moved).not.toEqual(before);
+  }).toPass();
+
+  await page.getByRole("button", { name: "Siguiente →" }).click();
+  await expect(page.locator(".player-position")).toHaveText("3 / 3");
+  await page.getByRole("button", { name: "← Anterior" }).click();
+  await expect(page.locator(".player-position")).toHaveText("2 / 3");
+  await expect(node).toBeVisible();
+
+  await expect(async () => {
+    const restored = translateOf(await readTransform());
+    expect(Math.abs(restored.x - moved.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(restored.y - moved.y)).toBeLessThanOrEqual(1);
+  }).toPass({ timeout: 15_000 });
+});

@@ -1,6 +1,13 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Snapshot, SnapshotDeclaration, SnapshotDiff, SnapshotEdge, SnapshotFile } from "@dcv/shared";
+import type {
+  CommitInfo,
+  Snapshot,
+  SnapshotDeclaration,
+  SnapshotDiff,
+  SnapshotEdge,
+  SnapshotFile
+} from "@dcv/shared";
 import { DiagramCanvas, type CanvasLayoutInfo } from "./DiagramCanvas.js";
 import { buildOverlay } from "./overlay.js";
 import { projectSnapshot } from "./projection.js";
@@ -8,9 +15,10 @@ import type { LayoutGraph, LayoutGraphNode } from "./layout/graph.js";
 import type { LayoutPositions } from "./layout/types.js";
 import { VisualStateStore, DEFAULT_VISUAL_CONTROLS, type VisualControls } from "./layout/persistence.js";
 import type { LayoutRunner } from "./layout/service.js";
-import { MemoryStorage } from "../test/fakes.js";
+import { makeCommit, MemoryStorage } from "../test/fakes.js";
 
 const RANGE = { startLine: 1, startColumn: 1, endLine: 1, endColumn: 1 };
+const NO_COMMITS: CommitInfo[] = [];
 
 function declaration(
   path: string,
@@ -128,6 +136,8 @@ function renderCanvas(options: {
   relayoutToken?: number;
   runner?: LayoutRunner;
   visualStore?: VisualStateStore;
+  selectedSha?: string | null;
+  commits?: CommitInfo[];
   onLayout?: (info: CanvasLayoutInfo) => void;
   ghosts?: ReturnType<typeof buildOverlay>["ghosts"];
 }) {
@@ -138,6 +148,8 @@ function renderCanvas(options: {
       visualStore={visualStore}
       view={options.projection.view}
       projection={options.projection}
+      selectedSha={options.selectedSha ?? null}
+      commits={options.commits ?? NO_COMMITS}
       ghosts={options.ghosts ?? options.overlay?.ghosts ?? []}
       overlay={options.overlay ?? null}
       focusedNodeId={null}
@@ -245,6 +257,8 @@ describe("DiagramCanvas", () => {
         visualStore={new VisualStateStore(new MemoryStorage(), "p1")}
         view="classes"
         projection={projection}
+        selectedSha={null}
+        commits={NO_COMMITS}
         ghosts={[]}
         overlay={null}
         focusedNodeId={null}
@@ -327,6 +341,8 @@ describe("DiagramCanvas", () => {
         visualStore={new VisualStateStore(new MemoryStorage(), "p1")}
         view="modules"
         projection={projection}
+        selectedSha={null}
+        commits={NO_COMMITS}
         ghosts={[]}
         overlay={overlay}
         focusedNodeId={null}
@@ -350,6 +366,8 @@ describe("DiagramCanvas", () => {
         visualStore={new VisualStateStore(new MemoryStorage(), "p1")}
         view="modules"
         projection={projection}
+        selectedSha={null}
+        commits={NO_COMMITS}
         ghosts={[]}
         overlay={overlay}
         focusedNodeId={null}
@@ -381,5 +399,167 @@ describe("DiagramCanvas", () => {
     const info = onLayout.mock.calls[0]![0] as CanvasLayoutInfo;
     expect(info.positions["module:src/util/a.ts"]).toBeUndefined();
     expect(info.positions["folder:src/util"]?.height).toBe(60);
+  });
+
+  it("restaura las posiciones propias de cada commit al alternar", async () => {
+    const item = declaration("src/a.ts", "class", "A");
+    const projection = projectSnapshot(snapshot([file("src/a.ts", [item])]), "classes");
+    const id = projection.nodes[0]!.id;
+    const commits = [makeCommit("c1", "uno"), makeCommit("c2", "dos")];
+    const store = new VisualStateStore(new MemoryStorage(), "p1");
+    store.saveCommitPositions("classes", "c1", {
+      [id]: { x: 120, y: 40, width: 260, height: 200 }
+    });
+    store.saveCommitPositions("classes", "c2", {
+      [id]: { x: 640, y: 380, width: 260, height: 200 }
+    });
+    const onLayout = vi.fn();
+    const runner = fakeRunner().runner;
+    const { view } = renderCanvas({
+      projection,
+      selectedSha: "c1",
+      commits,
+      visualStore: store,
+      runner,
+      onLayout
+    });
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(1));
+    expect(
+      (onLayout.mock.calls[0]![0] as CanvasLayoutInfo).positions[id]
+    ).toMatchObject({ x: 120, y: 40 });
+
+    view.rerender(
+      <DiagramCanvas
+        visualStore={store}
+        view="classes"
+        projection={projection}
+        selectedSha="c2"
+        commits={commits}
+        ghosts={[]}
+        overlay={null}
+        focusedNodeId={null}
+        controls={DEFAULT_VISUAL_CONTROLS}
+        relayoutToken={0}
+        onToggleFolder={() => {}}
+        onOpenClass={() => {}}
+        onLayout={onLayout}
+        layoutRunner={runner}
+      />
+    );
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(2));
+    expect(
+      (onLayout.mock.calls[1]![0] as CanvasLayoutInfo).positions[id]
+    ).toMatchObject({ x: 640, y: 380 });
+
+    view.rerender(
+      <DiagramCanvas
+        visualStore={store}
+        view="classes"
+        projection={projection}
+        selectedSha="c1"
+        commits={commits}
+        ghosts={[]}
+        overlay={null}
+        focusedNodeId={null}
+        controls={DEFAULT_VISUAL_CONTROLS}
+        relayoutToken={0}
+        onToggleFolder={() => {}}
+        onOpenClass={() => {}}
+        onLayout={onLayout}
+        layoutRunner={runner}
+      />
+    );
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(3));
+    expect(
+      (onLayout.mock.calls[2]![0] as CanvasLayoutInfo).positions[id]
+    ).toMatchObject({ x: 120, y: 40 });
+  });
+
+  it("hereda del commit más cercano y guarda el resultado para el commit visitado", async () => {
+    const item = declaration("src/a.ts", "class", "A");
+    const projection = projectSnapshot(snapshot([file("src/a.ts", [item])]), "classes");
+    const id = projection.nodes[0]!.id;
+    const commits = [makeCommit("c1", "uno"), makeCommit("c2", "dos")];
+    const store = new VisualStateStore(new MemoryStorage(), "p1");
+    store.saveCommitPositions("classes", "c1", {
+      [id]: { x: 75, y: 125, width: 260, height: 200 }
+    });
+    const legacy = { [id]: { x: 1, y: 2, width: 260, height: 200 } };
+    store.savePositions("classes", legacy);
+    const onLayout = vi.fn();
+
+    renderCanvas({
+      projection,
+      selectedSha: "c2",
+      commits,
+      visualStore: store,
+      onLayout
+    });
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(1));
+    expect(
+      (onLayout.mock.calls[0]![0] as CanvasLayoutInfo).positions[id]
+    ).toMatchObject({ x: 75, y: 125 });
+    expect(store.hasCommitPositions("classes", "c2")).toBe(true);
+    expect(store.loadCommitPositions("classes", "c2")?.[id]).toMatchObject({
+      x: 75,
+      y: 125
+    });
+    expect(store.loadPositions("classes")).toEqual(legacy);
+  });
+
+  it("re-layout reemplaza solo las posiciones del commit actual", async () => {
+    const item = declaration("src/a.ts", "class", "A");
+    const projection = projectSnapshot(snapshot([file("src/a.ts", [item])]), "classes");
+    const id = projection.nodes[0]!.id;
+    const commits = [makeCommit("c1", "uno"), makeCommit("c2", "dos")];
+    const store = new VisualStateStore(new MemoryStorage(), "p1");
+    store.saveCommitPositions("classes", "c1", {
+      [id]: { x: 10, y: 20, width: 260, height: 200 }
+    });
+    store.saveCommitPositions("classes", "c2", {
+      [id]: { x: 500, y: 600, width: 260, height: 200 }
+    });
+    const onLayout = vi.fn();
+    const runner = fakeRunner().runner;
+    const { view } = renderCanvas({
+      projection,
+      selectedSha: "c1",
+      commits,
+      visualStore: store,
+      runner,
+      onLayout
+    });
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(1));
+    expect(store.loadCommitPositions("classes", "c1")?.[id]).toMatchObject({
+      x: 10,
+      y: 20
+    });
+
+    view.rerender(
+      <DiagramCanvas
+        visualStore={store}
+        view="classes"
+        projection={projection}
+        selectedSha="c1"
+        commits={commits}
+        ghosts={[]}
+        overlay={null}
+        focusedNodeId={null}
+        controls={DEFAULT_VISUAL_CONTROLS}
+        relayoutToken={1}
+        onToggleFolder={() => {}}
+        onOpenClass={() => {}}
+        onLayout={onLayout}
+        layoutRunner={runner}
+      />
+    );
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(2));
+    const info = onLayout.mock.calls[1]![0] as CanvasLayoutInfo;
+    expect(info.reused).toBe(0);
+    expect(store.loadCommitPositions("classes", "c1")?.[id]?.x).not.toBe(10);
+    expect(store.loadCommitPositions("classes", "c2")?.[id]).toMatchObject({
+      x: 500,
+      y: 600
+    });
   });
 });

@@ -225,6 +225,8 @@ export function ProjectViewerPage() {
                       visualStore={visualStore}
                       view={state.view}
                       projection={projection}
+                      selectedSha={state.selectedSha}
+                      commits={state.commits}
                       ghosts={ghosts}
                       overlay={overlay}
                       focusedNodeId={state.focusedNodeId}

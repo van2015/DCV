@@ -9,7 +9,7 @@ Visor local de la evolución arquitectónica de proyectos TypeScript. Importa un
 - Tres vistas sobre el mismo modelo: **Clases**, **Módulos** y **Paquetes**; las carpetas se dibujan como contenedores colapsables.
 - Superposición de diferencias con marcadores: `+` añadido, `−` eliminado, `~` modificado, `≈` solo cuerpo, `→` movido, `↻` renombrado; los elementos eliminados se muestran como nodos fantasma.
 - Panel de cambios agrupado por estado, con filtros (implementación, miembros, tipos) y salto directo al nodo afectado.
-- Layout incremental con ELK ejecutado en un Web Worker (con fallback en proceso), posiciones y cámara persistidas por proyecto y vista, y botón `Re-layout`.
+- Layout incremental con ELK ejecutado en un Web Worker (con fallback en proceso), posiciones persistidas por commit, proyecto y vista (con herencia desde el commit más cercano y poda LRU de 50), cámara y controles por proyecto y vista, y botón `Re-layout`.
 - Modo foco con profundidad de 1 a 3 saltos (se activa a partir de 40 nodos) y opción de ocultar el resto.
 - Análisis sintáctico con la API del compilador de TypeScript (no ejecuta el código), cache por blob y versión de analizador; los archivos con errores de sintaxis se avisan sin romper la vista.
 - Seguridad pensada para uso local: escucha solo en `127.0.0.1`, token de sesión por arranque y validación de Host/Origin.
@@ -131,8 +131,8 @@ Fuera del alcance de la versión actual: repositorios privados por URL, otros le
 
 ## Estado del proyecto
 
-El cambio `add-uml-history-viewer` está completo (58/58 tareas verificadas). La verificación incluye:
+Los cambios `add-uml-history-viewer` (58/58 tareas) y `save-commit-diagram-positions` (11/11 tareas) están completos. La verificación incluye:
 
-- `pnpm test`: 178 pruebas (shared 5, analyzer 36, web 70, server 67).
-- `pnpm e2e`: 2 pruebas Playwright (importación, navegación, cambio de vista, foco y persistencia de cámara).
+- `pnpm test`: 192 pruebas (shared 5, analyzer 36, web 84, server 67).
+- `pnpm e2e`: 3 pruebas Playwright (importación, navegación, cambio de vista, foco, persistencia de cámara y restauración de posiciones por commit).
 - `pnpm benchmark`: en un repositorio sintético de 100 archivos y 800 clases, snapshot en frío de 263.6 ms, con cache 42.7 ms (x6.2), diff 8.2 ms y layout ELK de 216 ms; el umbral de foco de 40 nodos y la cache por blob quedan validados con estos datos.

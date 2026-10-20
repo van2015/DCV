@@ -34,6 +34,7 @@ export interface ClientLike {
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 }
 
 export type LoadStatus = "idle" | "loading" | "error" | "ready";

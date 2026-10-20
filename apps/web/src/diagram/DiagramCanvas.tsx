@@ -10,6 +10,7 @@ import {
   type Node as FlowNode,
   type NodeProps
 } from "@xyflow/react";
+import type { CommitInfo } from "@dcv/shared";
 import type { DiagramGhost, DiagramOverlay, OverlayStatus } from "./overlay.js";
 import type { DiagramNode, DiagramProjection } from "./projection.js";
 import type { ClassNodeData, ModuleNodeData, PackageNodeData } from "./projection.js";
@@ -20,6 +21,7 @@ import { PackageNodeCard } from "./nodes/PackageNode.js";
 import { buildLayoutGraph, ghostToLayoutNode, type LayoutGraph, type LayoutGraphNode } from "./layout/graph.js";
 import { focusActive, focusNeighborhood } from "./layout/focus.js";
 import { defaultLayoutRunner, type LayoutRunner } from "./layout/service.js";
+import { resolveCommitPositions } from "./layout/inheritance.js";
 import { reconcileLayout } from "./layout/reconcile.js";
 import { VisualStateStore, type VisualControls } from "./layout/persistence.js";
 import type { LayoutPositions } from "./layout/types.js";
@@ -47,6 +49,8 @@ export interface DiagramCanvasProps {
   visualStore: VisualStateStore;
   view: DiagramProjection["view"];
   projection: DiagramProjection;
+  selectedSha: string | null;
+  commits: readonly CommitInfo[];
   ghosts: DiagramGhost[];
   overlay: DiagramOverlay | null;
   focusedNodeId: string | null;
@@ -62,6 +66,8 @@ export function DiagramCanvas({
   visualStore,
   view,
   projection,
+  selectedSha,
+  commits,
   ghosts,
   overlay,
   focusedNodeId,
@@ -86,9 +92,20 @@ export function DiagramCanvas({
     const force = previousToken.current !== relayoutToken;
     previousToken.current = relayoutToken;
     if (force) {
-      visualStore.clearPositions(view);
+      if (selectedSha) {
+        visualStore.clearCommitPositions(view, selectedSha);
+      } else {
+        visualStore.clearPositions(view);
+      }
     }
-    const stored = force ? {} : visualStore.loadPositions(view);
+    const stored = force
+      ? {}
+      : resolveCommitPositions(
+          visualStore,
+          view,
+          selectedSha,
+          commits.map((commit) => commit.sha)
+        );
     const allNodes = [...projection.nodes, ...ghosts.map(ghostToLayoutNode)];
     const layoutEdges = projection.edges.map((edge) => ({
       id: edge.id,
@@ -120,7 +137,11 @@ export function DiagramCanvas({
         }
       }
       positionsRef.current = result.positions;
-      visualStore.savePositions(view, result.positions);
+      if (selectedSha) {
+        visualStore.saveCommitPositions(view, selectedSha, result.positions);
+      } else {
+        visualStore.savePositions(view, result.positions);
+      }
 
       const visibleIds = visibilitySet({
         overlay,
@@ -156,7 +177,19 @@ export function DiagramCanvas({
     return () => {
       cancelled = true;
     };
-  }, [projection, ghosts, overlay, focusedNodeId, controls, relayoutToken, view, visualStore, runner]);
+  }, [
+    projection,
+    selectedSha,
+    commits,
+    ghosts,
+    overlay,
+    focusedNodeId,
+    controls,
+    relayoutToken,
+    view,
+    visualStore,
+    runner
+  ]);
 
   return (
     <div className="diagram-canvas-flow" aria-label={`Diagrama de ${view}`}>
@@ -180,7 +213,11 @@ export function DiagramCanvas({
               y: node.position.y
             }
           };
-          visualStore.savePositions(view, positionsRef.current);
+          if (selectedSha) {
+            visualStore.saveCommitPositions(view, selectedSha, positionsRef.current);
+          } else {
+            visualStore.savePositions(view, positionsRef.current);
+          }
           setNodes((current) =>
             current.map((item) =>
               item.id === node.id ? { ...item, position: node.position } : item
