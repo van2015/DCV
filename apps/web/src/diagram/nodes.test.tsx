@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { MemberModel, SnapshotDeclaration } from "@dcv/shared";
+import { memberKey, type MemberModel, type SnapshotDeclaration } from "@dcv/shared";
 import { ClassNodeCard } from "./nodes/ClassNode.js";
 import { ModuleNodeCard } from "./nodes/ModuleNode.js";
 import { PackageNodeCard } from "./nodes/PackageNode.js";
@@ -141,6 +141,73 @@ describe("tarjetas de nodos UML", () => {
     expect(card).toHaveTextContent("«package»");
     expect(card).toHaveTextContent("3 módulos");
     expect(card).toHaveTextContent("src/domain");
+  });
+
+  it("aplica niveles de calor a cajas y miembros sin teñir fantasmas", () => {
+    const run = member({ name: "run" });
+    render(
+      <ClassNodeCard
+        data={{ kind: "class", declaration: declaration({ name: "Hot", members: [run] }), stereotype: "class" }}
+        change={{ status: "added", probable: false, kind: "class" }}
+        heatCount={8}
+        heatLevel={4}
+        memberHeatLevels={new Map([[memberKey(run), 3]])}
+      />
+    );
+
+    const classCard = screen.getByLabelText("class Hot");
+    expect(classCard).toHaveClass("heat-4");
+    expect(classCard).toHaveClass("change-added");
+    expect(classCard.querySelector(".uml-member")).toHaveClass("heat-3");
+
+    const add = declaration({
+      id: "src/math.ts#function:add",
+      kind: "function",
+      name: "add",
+      path: "src/math.ts",
+      signature: "add(): number"
+    });
+    const result = declaration({
+      id: "src/math.ts#type:Result",
+      kind: "type",
+      name: "Result",
+      path: "src/math.ts",
+      type: "number"
+    });
+    render(
+      <ModuleNodeCard
+        data={{ kind: "module", path: "src/math.ts", functions: [add], types: [result] }}
+        heatCount={4}
+        heatLevel={2}
+        declarationHeatLevels={new Map([[add.id, 1], [result.id, 4]])}
+      />
+    );
+    const moduleCard = screen.getByLabelText("módulo src/math.ts");
+    expect(moduleCard).toHaveClass("heat-2");
+    expect(moduleCard.querySelector(".uml-member")).toHaveClass("heat-1");
+    expect(moduleCard.querySelectorAll(".uml-member")[1]).toHaveClass("heat-4");
+
+    render(
+      <PackageNodeCard
+        data={{ kind: "package", directory: "src/domain", moduleCount: 3 }}
+        heatCount={6}
+        heatLevel={3}
+      />
+    );
+    expect(screen.getByLabelText("paquete src/domain")).toHaveClass("heat-3");
+
+    render(
+      <ClassNodeCard
+        data={{ kind: "class", declaration: declaration({ name: "GhostHeat" }), stereotype: "class" }}
+        ghost
+        change={{ status: "removed", probable: false, kind: "class" }}
+        heatCount={10}
+        heatLevel={4}
+      />
+    );
+    const ghost = screen.getByLabelText("class GhostHeat (eliminado)");
+    expect(ghost).not.toHaveClass("heat-4");
+    expect(ghost).toHaveClass("ghost");
   });
 
   it("marca la caja de un nodo añadido y conserva la insignia", () => {

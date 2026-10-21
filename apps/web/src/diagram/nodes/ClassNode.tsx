@@ -3,6 +3,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { ClassNodeData } from "../projection.js";
 import type { OverlayStatus } from "../overlay.js";
 import { ChangeBadge } from "../ChangeBadge.js";
+import type { HeatLevel } from "../heatmap.js";
 
 const VISIBILITY_MARKERS: Record<Visibility, string> = {
   public: "+",
@@ -22,6 +23,9 @@ export interface ClassNodeCardProps {
   memberChanges?: Map<string, OverlayStatus>;
   ghost?: boolean;
   showMembers?: boolean;
+  heatCount?: number;
+  heatLevel?: HeatLevel;
+  memberHeatLevels?: Map<string, HeatLevel>;
 }
 
 export function ClassNodeCard({
@@ -29,13 +33,17 @@ export function ClassNodeCard({
   change,
   memberChanges,
   ghost = false,
-  showMembers = true
+  showMembers = true,
+  heatCount = 0,
+  heatLevel = 0,
+  memberHeatLevels
 }: ClassNodeCardProps) {
   const { declaration, stereotype } = data;
   const classes = [
     "uml-node",
     "uml-class",
     change ? `change-${change.status}` : "",
+    !ghost && heatLevel > 0 ? `heat-${heatLevel}` : "",
     ghost ? "ghost" : ""
   ]
     .filter(Boolean)
@@ -45,7 +53,12 @@ export function ClassNodeCard({
     : `${stereotype} ${declaration.name}`;
 
   return (
-    <article className={classes} aria-label={label}>
+    <article
+      className={classes}
+      aria-label={label}
+      data-heat-count={heatCount}
+      data-heat-level={heatLevel}
+    >
       <header className="uml-node-header">
         <span className="uml-stereotype">«{stereotype}»</span>
         <strong>
@@ -63,6 +76,7 @@ export function ClassNodeCard({
                 key={`${member.name}-${index}`}
                 member={member}
                 status={memberChanges?.get(memberKey(member))}
+                heatLevel={memberHeatLevels?.get(memberKey(member))}
               />
             ))
           )}
@@ -75,15 +89,18 @@ export function ClassNodeCard({
 
 function MemberLine({
   member,
-  status
+  status,
+  heatLevel = 0
 }: {
   member: MemberModel;
   status?: OverlayStatus;
+  heatLevel?: HeatLevel;
 }) {
   const classes = [
     "uml-member",
     member.static ? "is-static" : "",
-    member.abstract ? "is-abstract" : ""
+    member.abstract ? "is-abstract" : "",
+    heatLevel > 0 ? `heat-${heatLevel}` : ""
   ]
     .filter(Boolean)
     .join(" ");

@@ -1,7 +1,8 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   CommitInfo,
+  HeatmapResponse,
   Snapshot,
   SnapshotDeclaration,
   SnapshotDiff,
@@ -39,6 +40,23 @@ function declaration(
     type: null,
     members: [],
     heritage: [],
+    bodyHash: null,
+    sourceRange: RANGE
+  };
+}
+
+function member(name: string): SnapshotDeclaration["members"][number] {
+  return {
+    kind: "method",
+    name,
+    visibility: "public",
+    static: false,
+    readonly: false,
+    optional: false,
+    abstract: false,
+    async: false,
+    signature: `${name}(): void`,
+    type: "void",
     bodyHash: null,
     sourceRange: RANGE
   };
@@ -140,6 +158,7 @@ function renderCanvas(options: {
   commits?: CommitInfo[];
   onLayout?: (info: CanvasLayoutInfo) => void;
   ghosts?: ReturnType<typeof buildOverlay>["ghosts"];
+  heatmap?: HeatmapResponse | null;
 }) {
   const visualStore =
     options.visualStore ?? new VisualStateStore(new MemoryStorage(), "p1");
@@ -154,6 +173,7 @@ function renderCanvas(options: {
       overlay={options.overlay ?? null}
       focusedNodeId={null}
       controls={options.controls ?? DEFAULT_VISUAL_CONTROLS}
+      heatmap={options.heatmap ?? null}
       relayoutToken={options.relayoutToken ?? 0}
       onToggleFolder={() => {}}
       onOpenClass={() => {}}
@@ -505,6 +525,69 @@ describe("DiagramCanvas", () => {
       y: 125
     });
     expect(store.loadPositions("classes")).toEqual(legacy);
+  });
+
+  it("propaga el calor solo a las entidades visibles y lo retira al desactivarlo", async () => {
+    const runA = member("run");
+    const runB = member("run");
+    const a = { ...declaration("src/a.ts", "class", "A"), members: [runA] };
+    const b = { ...declaration("src/b.ts", "class", "B"), members: [runB] };
+    const projection = projectSnapshot(
+      snapshot([file("src/a.ts", [a]), file("src/b.ts", [b])]),
+      "classes"
+    );
+    const heatmap: HeatmapResponse = {
+      branch: "main",
+      commit: "c1",
+      commits: 5,
+      nodes: {
+        [a.id]: 2,
+        [b.id]: 10,
+        "module:src/a.ts": 100,
+        "package:src": 100
+      },
+      members: {
+        [a.id]: { "method:run": 5 },
+        [b.id]: { "method:run": 1 }
+      }
+    };
+    const onLayout = vi.fn();
+    const visualStore = new VisualStateStore(new MemoryStorage(), "p1");
+    const { view } = renderCanvas({ projection, heatmap, onLayout, visualStore });
+    await waitFor(() => expect(onLayout).toHaveBeenCalledTimes(1));
+
+    const hot = await screen.findByLabelText("class B");
+    expect(hot).toHaveClass("heat-4");
+    expect(hot.querySelector(".uml-member")).toHaveClass("heat-1");
+    const warm = screen.getByLabelText("class A");
+    expect(warm).toHaveClass("heat-1");
+    expect(warm.querySelector(".uml-member")).toHaveClass("heat-4");
+
+    view.rerender(
+      <DiagramCanvas
+        visualStore={visualStore}
+        view="classes"
+        projection={projection}
+        selectedSha={null}
+        commits={NO_COMMITS}
+        ghosts={[]}
+        overlay={null}
+        focusedNodeId={null}
+        controls={DEFAULT_VISUAL_CONTROLS}
+        heatmap={null}
+        relayoutToken={0}
+        onToggleFolder={() => {}}
+        onOpenClass={() => {}}
+        onLayout={onLayout}
+        layoutRunner={fakeRunner().runner}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("class B")).not.toHaveClass("heat-4")
+    );
+    expect(screen.getByLabelText("class B").querySelector(".uml-member")).not.toHaveClass(
+      "heat-1"
+    );
   });
 
   it("renderiza aristas añadidas y eliminadas con su estado", async () => {

@@ -258,6 +258,14 @@ export interface ModelResponse {
   warnings: ProjectWarning[];
 }
 
+export interface HeatmapResponse {
+  branch: string;
+  commit: string;
+  commits: number;
+  nodes: Record<string, number>;
+  members: Record<string, Record<string, number>>;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

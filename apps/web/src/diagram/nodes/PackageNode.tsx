@@ -2,6 +2,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { PackageNodeData } from "../projection.js";
 import type { OverlayStatus } from "../overlay.js";
 import { ChangeBadge } from "../ChangeBadge.js";
+import type { HeatLevel } from "../heatmap.js";
 
 export type PackageFlowNode = Node<PackageNodeData, "package">;
 
@@ -13,14 +14,23 @@ export interface PackageNodeCardProps {
   data: PackageNodeData;
   change?: OverlayStatus | null;
   ghost?: boolean;
+  heatCount?: number;
+  heatLevel?: HeatLevel;
 }
 
-export function PackageNodeCard({ data, change, ghost = false }: PackageNodeCardProps) {
+export function PackageNodeCard({
+  data,
+  change,
+  ghost = false,
+  heatCount = 0,
+  heatLevel = 0
+}: PackageNodeCardProps) {
   const label = data.directory === "" ? "(raíz)" : data.directory;
   const classes = [
     "uml-node",
     "uml-package",
     change ? `change-${change.status}` : "",
+    !ghost && heatLevel > 0 ? `heat-${heatLevel}` : "",
     ghost ? "ghost" : ""
   ]
     .filter(Boolean)
@@ -30,6 +40,8 @@ export function PackageNodeCard({ data, change, ghost = false }: PackageNodeCard
     <article
       className={classes}
       aria-label={`paquete ${label}${ghost ? " (eliminado)" : ""}`}
+      data-heat-count={heatCount}
+      data-heat-level={heatLevel}
     >
       <header className="uml-node-header">
         <span className="uml-stereotype">«package»</span>

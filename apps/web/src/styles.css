@@ -720,6 +720,91 @@ button.danger {
   border-style: dashed;
 }
 
+.uml-node.heat-1 {
+  --heat-border: #bfdbfe;
+  --heat-box: #eff6ff;
+  --heat-header: #dbeafe;
+}
+
+.uml-node.heat-2 {
+  --heat-border: #93c5fd;
+  --heat-box: #dbeafe;
+  --heat-header: #bfdbfe;
+}
+
+.uml-node.heat-3 {
+  --heat-border: #60a5fa;
+  --heat-box: #bfdbfe;
+  --heat-header: #93c5fd;
+}
+
+.uml-node.heat-4 {
+  --heat-border: #3b82f6;
+  --heat-box: #93c5fd;
+  --heat-header: #60a5fa;
+}
+
+.uml-node.heat-1,
+.uml-node.heat-2,
+.uml-node.heat-3,
+.uml-node.heat-4 {
+  border-color: var(--heat-border);
+  background: var(--heat-box);
+}
+
+.uml-node.heat-1 .uml-node-header,
+.uml-node.heat-2 .uml-node-header,
+.uml-node.heat-3 .uml-node-header,
+.uml-node.heat-4 .uml-node-header {
+  background: var(--heat-header);
+}
+
+.uml-member.heat-1 {
+  background: #eff6ff;
+}
+
+.uml-member.heat-2 {
+  background: #dbeafe;
+}
+
+.uml-member.heat-3 {
+  background: #bfdbfe;
+}
+
+.uml-member.heat-4 {
+  background: #93c5fd;
+}
+
+.uml-member.heat-1,
+.uml-member.heat-2,
+.uml-member.heat-3,
+.uml-member.heat-4 {
+  border-radius: 3px;
+  padding: 0 0.2rem;
+  margin: 0 -0.2rem;
+}
+
+.heatmap-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.heatmap-legend .heatmap-gradient {
+  width: 4.5rem;
+  height: 0.6rem;
+  border: 1px solid color-mix(in srgb, #1d4ed8 25%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eff6ff, #dbeafe, #bfdbfe, #93c5fd);
+}
+
+.heatmap-legend button {
+  font: inherit;
+  padding: 0.15rem 0.45rem;
+}
+
 .change-badge + .change-badge {
   margin-left: 0.25rem;
 }

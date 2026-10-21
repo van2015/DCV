@@ -5,6 +5,7 @@ import {
   FakeClient,
   MemoryStorage,
   makeCommit,
+  makeHeatmap,
   makeModel,
   makeProject
 } from "../test/fakes.js";
@@ -13,12 +14,14 @@ async function setup(options: {
   projects?: ReturnType<typeof makeProject>[];
   commits?: Record<string, ReturnType<typeof makeCommit>[]>;
   models?: Record<string, ReturnType<typeof makeModel>>;
+  heatmaps?: Record<string, ReturnType<typeof makeHeatmap>>;
   storage?: MemoryStorage;
 } = {}) {
   const client = new FakeClient({
     projects: options.projects ?? [],
     commits: options.commits ?? {},
-    models: options.models ?? {}
+    models: options.models ?? {},
+    heatmaps: options.heatmaps ?? {}
   });
   const storage = options.storage ?? new MemoryStorage();
   const store = new AppStore(client, { storage });
@@ -173,6 +176,7 @@ describe("AppStore", () => {
       focusEnabled: true,
       focusDepth: 3,
       focusHide: true,
+      heatmapEnabled: false,
       collapsedFolders: ["src/util"]
     });
     expect(store.getState().relayoutToken).toBe(1);
@@ -187,12 +191,108 @@ describe("AppStore", () => {
       focusEnabled: true,
       focusDepth: 3,
       focusHide: true,
+      heatmapEnabled: false,
       collapsedFolders: ["src/util"]
     });
     expect(second.getState().relayoutToken).toBe(0);
 
     second.toggleFolder("src/util");
     expect(second.getState().visualControls.collapsedFolders).toEqual([]);
+  });
+
+  it("carga el mapa de calor solo al activarlo y lo limpia al desactivarlo", async () => {
+    const commits = [
+      makeCommit("c1", "primero"),
+      makeCommit("c2", "segundo", ["c1"])
+    ];
+    const project = makeProject({ lastCommit: "c2" });
+    const { client, store } = await setup({
+      projects: [project],
+      commits: { p1: commits },
+      heatmaps: {
+        "p1:c2": makeHeatmap("c2", {
+          commits: 2,
+          nodes: { "src/a.ts#class:A": 2 }
+        })
+      }
+    });
+    await store.openProject("p1");
+    await vi.waitFor(() => expect(store.getState().modelStatus).toBe("ready"));
+
+    expect(store.getState().heatmapStatus).toBe("idle");
+    expect(client.heatmapCalls).toHaveLength(0);
+
+    store.toggleHeatmap();
+    expect(store.getState().visualControls.heatmapEnabled).toBe(true);
+    await vi.waitFor(() => expect(store.getState().heatmapStatus).toBe("ready"));
+
+    expect(store.getState().heatmap?.nodes["src/a.ts#class:A"]).toBe(2);
+    expect(client.heatmapCalls).toEqual([
+      { id: "p1", sha: "c2", branch: "main" }
+    ]);
+
+    store.toggleHeatmap();
+    expect(store.getState().visualControls.heatmapEnabled).toBe(false);
+    expect(store.getState().heatmap).toBeNull();
+    expect(store.getState().heatmapStatus).toBe("idle");
+  });
+
+  it("descarta respuestas de mapa de calor fuera de orden", async () => {
+    const commits = [
+      makeCommit("c1", "primero"),
+      makeCommit("c2", "segundo", ["c1"]),
+      makeCommit("c3", "tercero", ["c2"])
+    ];
+    const { client, store } = await setup({
+      projects: [makeProject({ lastCommit: "c3" })],
+      commits: { p1: commits },
+      heatmaps: {
+        "p1:c3": makeHeatmap("c3", { commits: 3 })
+      }
+    });
+    await store.openProject("p1");
+    await vi.waitFor(() => expect(store.getState().modelStatus).toBe("ready"));
+    store.toggleHeatmap();
+    await vi.waitFor(() => expect(store.getState().heatmapStatus).toBe("ready"));
+
+    let release!: () => void;
+    client.heatmapGates.c2 = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    store.selectCommit("c2");
+    await vi.waitFor(() =>
+      expect(client.heatmapCalls.some((call) => call.sha === "c2")).toBe(true)
+    );
+    store.selectCommit("c3");
+    await vi.waitFor(() => expect(store.getState().heatmapStatus).toBe("ready"));
+
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.getState().heatmap?.commit).toBe("c3");
+  });
+
+  it("restaura el mapa de calor activo al abrir el proyecto", async () => {
+    const commits = [makeCommit("c1", "inicial")];
+    const project = makeProject();
+    const storage = new MemoryStorage();
+    storage.setItem(
+      "dcv.layout:p1:controls",
+      JSON.stringify({ heatmapEnabled: true })
+    );
+    const { client, store } = await setup({
+      storage,
+      projects: [project],
+      commits: { p1: commits },
+      heatmaps: { "p1:c1": makeHeatmap("c1", { commits: 1 }) }
+    });
+
+    await store.openProject("p1");
+
+    expect(store.getState().visualControls.heatmapEnabled).toBe(true);
+    await vi.waitFor(() => expect(store.getState().heatmapStatus).toBe("ready"));
+    expect(client.heatmapCalls).toEqual([
+      { id: "p1", sha: "c1", branch: "main" }
+    ]);
   });
 
   it("al eliminar el proyecto activo vuelve a la biblioteca", async () => {

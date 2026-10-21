@@ -3,6 +3,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { ModuleNodeData } from "../projection.js";
 import type { OverlayStatus } from "../overlay.js";
 import { ChangeBadge } from "../ChangeBadge.js";
+import type { HeatLevel } from "../heatmap.js";
 
 export type ModuleFlowNode = Node<ModuleNodeData, "module">;
 
@@ -17,6 +18,9 @@ export interface ModuleNodeCardProps {
   declarationChanges?: Map<string, OverlayStatus>;
   ghost?: boolean;
   showMembers?: boolean;
+  heatCount?: number;
+  heatLevel?: HeatLevel;
+  declarationHeatLevels?: Map<string, HeatLevel>;
 }
 
 const CLASS_LIKE = new Set(["class", "interface", "enum"]);
@@ -27,12 +31,16 @@ export function ModuleNodeCard({
   change,
   declarationChanges,
   ghost = false,
-  showMembers = true
+  showMembers = true,
+  heatCount = 0,
+  heatLevel = 0,
+  declarationHeatLevels
 }: ModuleNodeCardProps) {
   const classes = [
     "uml-node",
     "uml-module",
     change ? `change-${change.status}` : "",
+    !ghost && heatLevel > 0 ? `heat-${heatLevel}` : "",
     ghost ? "ghost" : ""
   ]
     .filter(Boolean)
@@ -40,7 +48,12 @@ export function ModuleNodeCard({
   const label = ghost ? `módulo ${data.path} (eliminado)` : `módulo ${data.path}`;
 
   return (
-    <article className={classes} aria-label={label}>
+    <article
+      className={classes}
+      aria-label={label}
+      data-heat-count={heatCount}
+      data-heat-level={heatLevel}
+    >
       <header className="uml-node-header">
         <span className="uml-stereotype">«module»</span>
         <strong>
@@ -58,6 +71,7 @@ export function ModuleNodeCard({
               key={declaration.id}
               declaration={declaration}
               status={declarationChanges?.get(declaration.id)}
+              heatLevel={declarationHeatLevels?.get(declaration.id)}
               onOpenClass={onOpenClass}
             />
           ))
@@ -73,6 +87,7 @@ export function ModuleNodeCard({
               key={declaration.id}
               declaration={declaration}
               status={declarationChanges?.get(declaration.id)}
+              heatLevel={declarationHeatLevels?.get(declaration.id)}
               onOpenClass={onOpenClass}
             />
           ))
@@ -86,10 +101,12 @@ export function ModuleNodeCard({
 function DeclarationLine({
   declaration,
   status,
+  heatLevel = 0,
   onOpenClass
 }: {
   declaration: SnapshotDeclaration;
   status?: OverlayStatus;
+  heatLevel?: HeatLevel;
   onOpenClass?: (declarationId: string) => void;
 }) {
   const content =
@@ -98,7 +115,13 @@ function DeclarationLine({
     return (
       <button
         type="button"
-        className="uml-member uml-link"
+        className={[
+          "uml-member",
+          "uml-link",
+          heatLevel > 0 ? `heat-${heatLevel}` : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
         title={`Abrir ${declaration.kind} ${declaration.name} en la vista de clases`}
         onClick={() => onOpenClass(declaration.id)}
       >
@@ -109,7 +132,15 @@ function DeclarationLine({
     );
   }
   return (
-    <span className="uml-member" title={declaration.kind}>
+    <span
+      className={[
+        "uml-member",
+        heatLevel > 0 ? `heat-${heatLevel}` : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      title={declaration.kind}
+    >
       <span className="uml-visibility">+</span>
       <span>{content}</span>
       {status && <ChangeBadge status={status} />}

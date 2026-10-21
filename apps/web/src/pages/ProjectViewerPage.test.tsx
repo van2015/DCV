@@ -9,18 +9,19 @@ import {
   FakeClient,
   MemoryStorage,
   makeCommit,
+  makeHeatmap,
   makeModel,
   makeProject
 } from "../test/fakes.js";
 
-function renderViewer(client: FakeClient) {
-  const store = new AppStore(client, { storage: new MemoryStorage() });
-  render(
+function renderViewer(client: FakeClient, storage = new MemoryStorage()) {
+  const store = new AppStore(client, { storage });
+  const view = render(
     <MemoryRouter initialEntries={["/projects/p1"]}>
       <App store={store} />
     </MemoryRouter>
   );
-  return store;
+  return { store, storage, ...view };
 }
 
 function asModel(declaration: SnapshotDeclaration): DeclarationModel {
@@ -274,6 +275,126 @@ describe("ProjectViewerPage", () => {
     await user.click(screen.getByRole("button", { name: "Siguiente →" }));
     await screen.findByRole("heading", { name: "cambio" });
     expect(screen.getByLabelText("Cambios de implementación")).not.toBeChecked();
+  });
+
+  it("activa el mapa de calor y restaura el control al reabrir", async () => {
+    const commit = makeCommit("c1", "inicial");
+    const storage = new MemoryStorage();
+    const firstClient = new FakeClient({
+      projects: [makeProject()],
+      commits: { p1: [commit] },
+      models: { "p1:c1": makeModel(commit) }
+    });
+    const first = renderViewer(firstClient, storage);
+    const user = userEvent.setup();
+
+    await screen.findByRole("heading", { name: "inicial" });
+    const control = screen.getByLabelText("Mapa de calor");
+    expect(control).not.toBeChecked();
+
+    await user.click(control);
+    expect(control).toBeChecked();
+    await waitFor(() =>
+      expect(first.store.getState().heatmapStatus).toBe("ready")
+    );
+    expect(firstClient.heatmapCalls).toEqual([
+      { id: "p1", sha: "c1", branch: "main" }
+    ]);
+
+    first.unmount();
+    const secondClient = new FakeClient({
+      projects: [makeProject()],
+      commits: { p1: [commit] },
+      models: { "p1:c1": makeModel(commit) }
+    });
+    renderViewer(secondClient, storage);
+    await screen.findByRole("heading", { name: "inicial" });
+
+    await waitFor(() => expect(screen.getByLabelText("Mapa de calor")).toBeChecked());
+    await waitFor(() => expect(secondClient.heatmapCalls).toHaveLength(1));
+  });
+
+  it("muestra el estado de carga, la leyenda y permite reintentar el mapa de calor", async () => {
+    const commit = makeCommit("c1", "inicial");
+    const base = makeModel(commit);
+    const declaration = {
+      id: "src/hot.ts#class:Hot",
+      path: "src/hot.ts",
+      kind: "class" as const,
+      name: "Hot",
+      exported: true,
+      defaultExport: false,
+      abstract: false,
+      declare: false,
+      async: false,
+      signature: null,
+      type: null,
+      members: [],
+      heritage: [],
+      bodyHash: null,
+      sourceRange: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 1 }
+    };
+    const model = makeModel(commit, {
+      snapshot: {
+        ...base.snapshot,
+        files: [
+          {
+            path: "src/hot.ts",
+            contentHash: "hash",
+            scriptKind: "ts",
+            imports: [],
+            declarations: [declaration],
+            diagnostics: []
+          }
+        ],
+        stats: { ...base.snapshot.stats, files: 1, declarations: 1, classes: 1 }
+      }
+    });
+    const client = new FakeClient({
+      projects: [makeProject()],
+      commits: { p1: [commit] },
+      models: { "p1:c1": model },
+      heatmaps: {
+        "p1:c1": makeHeatmap("c1", {
+          commits: 4,
+          nodes: { [declaration.id]: 3 }
+        })
+      }
+    });
+    let release!: () => void;
+    client.heatmapGates.c1 = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderViewer(client);
+    const user = userEvent.setup();
+
+    await screen.findByRole("heading", { name: "inicial" });
+    await user.click(screen.getByLabelText("Mapa de calor"));
+    expect(await screen.findByText("Calculando mapa de calor…")).toBeInTheDocument();
+
+    release();
+    const legend = await screen.findByLabelText("Leyenda del mapa de calor");
+    expect(legend).toHaveTextContent("Máx. 3");
+    expect(legend).toHaveTextContent("4 commits");
+    await waitFor(() =>
+      expect(screen.getByLabelText("class Hot")).toHaveClass("heat-4")
+    );
+
+    client.errors.getHeatmap = new Error("fallo temporal");
+    await user.click(screen.getByLabelText("Mapa de calor"));
+    await user.click(screen.getByLabelText("Mapa de calor"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("fallo temporal")
+    );
+
+    delete client.errors.getHeatmap;
+    await user.click(screen.getByRole("button", { name: "Reintentar" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    );
+    expect(screen.getByLabelText("Leyenda del mapa de calor")).toHaveTextContent(
+      "Máx. 3"
+    );
   });
 
   it("autoselecciona la vista de módulos y permite cambiarla sin mover el commit", async () => {

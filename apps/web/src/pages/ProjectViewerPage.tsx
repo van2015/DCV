@@ -8,6 +8,7 @@ import { CommitTimeline } from "../components/CommitTimeline.js";
 import { DiagramEmptyState } from "../components/DiagramEmptyState.js";
 import { DiagramCanvas } from "../diagram/DiagramCanvas.js";
 import { buildOverlay, filterOverlay } from "../diagram/overlay.js";
+import { heatmapMaxima } from "../diagram/heatmap.js";
 import { projectSnapshot } from "../diagram/projection.js";
 import { useAppState, useAppStore } from "../state/StoreProvider.js";
 
@@ -44,6 +45,14 @@ export function ProjectViewerPage() {
     [rawOverlay, state.changeFilters]
   );
   const ghosts = useMemo(() => overlay?.ghosts ?? [], [overlay]);
+  const heatmapMax = useMemo(
+    () =>
+      heatmapMaxima(
+        state.heatmap,
+        projection?.nodes.map((node) => node.id) ?? []
+      ),
+    [state.heatmap, projection]
+  );
   const visualStore = store.getVisualStore();
 
   const handleOpenClass = useCallback(
@@ -179,6 +188,14 @@ export function ProjectViewerPage() {
                   <label>
                     <input
                       type="checkbox"
+                      checked={state.visualControls.heatmapEnabled}
+                      onChange={() => store.toggleHeatmap()}
+                    />
+                    Mapa de calor
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
                       checked={state.visualControls.focusEnabled}
                       onChange={(event) => store.setFocusEnabled(event.target.checked)}
                     />
@@ -214,6 +231,35 @@ export function ProjectViewerPage() {
                     filters={state.changeFilters}
                     onToggle={(key) => store.toggleChangeFilter(key)}
                   />
+                  {state.visualControls.heatmapEnabled && (
+                    <div className="heatmap-legend" aria-label="Leyenda del mapa de calor">
+                      {state.heatmapStatus === "loading" && (
+                        <span role="status">Calculando mapa de calor…</span>
+                      )}
+                      {state.heatmapStatus === "error" && (
+                        <>
+                          <span role="alert">
+                            No se pudo calcular el mapa de calor: {state.heatmapError}
+                          </span>
+                          <button type="button" onClick={() => void store.loadHeatmap()}>
+                            Reintentar
+                          </button>
+                        </>
+                      )}
+                      {state.heatmapStatus === "ready" && state.heatmap && (
+                        <>
+                          <span>Menos</span>
+                          <span className="heatmap-gradient" aria-hidden="true" />
+                          <span>Más</span>
+                          <span>Máx. {heatmapMax.nodes}</span>
+                          <span>
+                            {state.heatmap.commits} commit
+                            {state.heatmap.commits === 1 ? "" : "s"}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="diagram-body">
@@ -231,6 +277,12 @@ export function ProjectViewerPage() {
                       overlay={overlay}
                       focusedNodeId={state.focusedNodeId}
                       controls={state.visualControls}
+                      heatmap={
+                        state.visualControls.heatmapEnabled &&
+                        state.heatmapStatus === "ready"
+                          ? state.heatmap
+                          : null
+                      }
                       relayoutToken={state.relayoutToken}
                       onToggleFolder={handleToggleFolder}
                       onOpenClass={handleOpenClass}

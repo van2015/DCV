@@ -2,6 +2,7 @@ import type {
   CommitInfo,
   CommitListResponse,
   DiagramView,
+  HeatmapResponse,
   ImportProgressEvent,
   ImportProjectResult,
   ModelResponse,
@@ -28,6 +29,7 @@ export interface ClientLike {
   listBranches(id: string): Promise<string[]>;
   listCommits(id: string, branch?: string): Promise<CommitListResponse>;
   getModel(id: string, sha: string, branch?: string): Promise<ModelResponse>;
+  getHeatmap(id: string, sha: string, branch?: string): Promise<HeatmapResponse>;
   subscribeEvents(handlers: EventHandlers, options?: { projectId?: string }): () => void;
 }
 
@@ -68,6 +70,9 @@ export interface AppState {
   model: ModelResponse | null;
   modelStatus: LoadStatus;
   modelError: string | null;
+  heatmap: HeatmapResponse | null;
+  heatmapStatus: LoadStatus;
+  heatmapError: string | null;
   importState: ImportState;
 }
 
@@ -95,6 +100,9 @@ const INITIAL_STATE: AppState = {
   model: null,
   modelStatus: "idle",
   modelError: null,
+  heatmap: null,
+  heatmapStatus: "idle",
+  heatmapError: null,
   importState: { open: false, status: "idle", error: null, progress: null, message: null }
 };
 
@@ -109,6 +117,7 @@ export class AppStore {
   private readonly storage: StorageLike | undefined;
   private importUnsubscribe: (() => void) | null = null;
   private modelRequest = 0;
+  private heatmapRequest = 0;
   private visualStore: VisualStateStore | null = null;
 
   constructor(client: ClientLike, options: AppStoreOptions = {}) {
@@ -155,6 +164,16 @@ export class AppStore {
 
   toggleFocusHide(): void {
     this.updateVisualControls({ focusHide: !this.state.visualControls.focusHide });
+  }
+
+  toggleHeatmap(): void {
+    const enabled = !this.state.visualControls.heatmapEnabled;
+    this.updateVisualControls({ heatmapEnabled: enabled });
+    if (enabled) {
+      void this.loadHeatmap();
+    } else {
+      this.clearHeatmap();
+    }
   }
 
   toggleFolder(path: string): void {
@@ -279,6 +298,7 @@ export class AppStore {
       return;
     }
     this.visualStore = null;
+    this.heatmapRequest += 1;
     this.set({
       projectStatus: "loading",
       projectError: null,
@@ -289,6 +309,9 @@ export class AppStore {
       model: null,
       modelStatus: "idle",
       modelError: null,
+      heatmap: null,
+      heatmapStatus: "idle",
+      heatmapError: null,
       historyNotice: null
     });
     try {
@@ -301,11 +324,13 @@ export class AppStore {
       this.visualStore = this.storage
         ? new VisualStateStore(this.storage, project.id)
         : null;
+      const visualControls =
+        this.visualStore?.loadControls() ?? DEFAULT_VISUAL_CONTROLS;
       this.set({
         activeProject: project,
         projectStatus: "ready",
         view: this.readStoredView(project.id) ?? "classes",
-        visualControls: this.visualStore?.loadControls() ?? DEFAULT_VISUAL_CONTROLS,
+        visualControls,
         branches,
         commits: history.commits,
         historyStatus: "ready",
@@ -314,6 +339,9 @@ export class AppStore {
       });
       if (selectedSha) {
         void this.loadModel(selectedSha);
+        if (visualControls.heatmapEnabled) {
+          void this.loadHeatmap();
+        }
       }
     } catch (error) {
       this.set({ projectStatus: "error", projectError: messageFor(error) });
@@ -343,6 +371,9 @@ export class AppStore {
       });
       if (selectedSha && selectedSha !== current) {
         void this.loadModel(selectedSha);
+        if (this.state.visualControls.heatmapEnabled) {
+          void this.loadHeatmap();
+        }
       }
     } catch (error) {
       this.set({ historyStatus: "error", historyError: messageFor(error) });
@@ -354,6 +385,7 @@ export class AppStore {
     if (!project || branch === project.branch) {
       return;
     }
+    this.clearHeatmap();
     this.set({ historyStatus: "loading", historyError: null, historyNotice: null });
     try {
       const updated = await this.client.updateProject(project.id, { branch });
@@ -369,6 +401,9 @@ export class AppStore {
       });
       if (selectedSha) {
         void this.loadModel(selectedSha);
+        if (this.state.visualControls.heatmapEnabled) {
+          void this.loadHeatmap();
+        }
       }
     } catch (error) {
       this.set({ historyStatus: "error", historyError: messageFor(error) });
@@ -381,6 +416,44 @@ export class AppStore {
     }
     this.set({ selectedSha: sha, focusedNodeId: null });
     void this.loadModel(sha);
+    if (this.state.visualControls.heatmapEnabled) {
+      void this.loadHeatmap();
+    }
+  }
+
+  async loadHeatmap(): Promise<void> {
+    const project = this.state.activeProject;
+    const sha = this.state.selectedSha;
+    if (
+      !project ||
+      !sha ||
+      !this.state.visualControls.heatmapEnabled
+    ) {
+      return;
+    }
+    const request = ++this.heatmapRequest;
+    this.set({ heatmapStatus: "loading", heatmapError: null, heatmap: null });
+    try {
+      const heatmap = await this.client.getHeatmap(
+        project.id,
+        sha,
+        project.branch
+      );
+      if (request !== this.heatmapRequest) {
+        return;
+      }
+      this.set({ heatmap, heatmapStatus: "ready" });
+    } catch (error) {
+      if (request !== this.heatmapRequest) {
+        return;
+      }
+      this.set({ heatmapStatus: "error", heatmapError: messageFor(error) });
+    }
+  }
+
+  private clearHeatmap(): void {
+    this.heatmapRequest += 1;
+    this.set({ heatmap: null, heatmapStatus: "idle", heatmapError: null });
   }
 
   async loadModel(sha: string): Promise<void> {
@@ -419,6 +492,7 @@ export class AppStore {
   }
 
   private resetActiveProject(): void {
+    this.heatmapRequest += 1;
     this.set({
       activeProject: null,
       view: "classes",
@@ -435,7 +509,10 @@ export class AppStore {
       selectedSha: null,
       model: null,
       modelStatus: "idle",
-      modelError: null
+      modelError: null,
+      heatmap: null,
+      heatmapStatus: "idle",
+      heatmapError: null
     });
   }
 

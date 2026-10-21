@@ -5,6 +5,7 @@ import {
   ModelQuerySchema,
   ProjectUpdateRequestSchema,
   type CommitListResponse,
+  type HeatmapResponse,
   type ImportProgressEvent,
   type ModelResponse,
   type ProjectImportRequest
@@ -15,6 +16,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { AnalysisService, type AnalysisTarget } from "./analysis/service.js";
+import { HeatmapService } from "./analysis/heatmap-service.js";
 import type { ProjectAnalyzer } from "./analysis/queue.js";
 import type { WorkerAnalyzerContext } from "./analysis/worker-executor.js";
 import { AppError, toApiError } from "./errors.js";
@@ -43,6 +45,7 @@ export interface AppOptions {
 interface ApiDependencies {
   service: ProjectService;
   analysis: AnalysisService;
+  heatmap: HeatmapService;
   bus: EventBus;
   ready: Promise<void>;
 }
@@ -101,6 +104,7 @@ function resolveDependencies(options: AppOptions): ApiDependencies | null {
     return {
       service: options.service,
       analysis: options.analysis,
+      heatmap: new HeatmapService(options.analysis),
       bus: options.bus ?? new EventBus(),
       ready: options.service.init()
     };
@@ -119,11 +123,17 @@ function resolveDependencies(options: AppOptions): ApiDependencies | null {
       bus,
       ...(options.createAnalyzer ? { createAnalyzer: options.createAnalyzer } : {})
     });
-  return { service, analysis, bus, ready: service.init() };
+  return {
+    service,
+    analysis,
+    heatmap: new HeatmapService(analysis),
+    bus,
+    ready: service.init()
+  };
 }
 
 function registerApi(app: Hono, dependencies: ApiDependencies): void {
-  const { service, analysis, bus, ready } = dependencies;
+  const { service, analysis, heatmap, bus, ready } = dependencies;
 
   app.use("/api/*", async (_c, next) => {
     await ready;
@@ -262,6 +272,23 @@ function registerApi(app: Hono, dependencies: ApiDependencies): void {
         diagnostics: snapshot.diagnostics,
         warnings: []
       };
+      return c.json(body);
+    })
+  );
+
+  app.get("/api/projects/:id/commits/:sha/heatmap", (c) =>
+    respond(c, async () => {
+      const project = await service.get(c.req.param("id"));
+      const branch = queryBranch(c) ?? project.branch;
+      const target: AnalysisTarget = {
+        projectId: project.id,
+        repoPath: project.repoPath,
+        branch
+      };
+      const body: HeatmapResponse = await heatmap.get(
+        target,
+        c.req.param("sha")
+      );
       return c.json(body);
     })
   );

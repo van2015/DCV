@@ -9,6 +9,7 @@ Visor local de la evolución arquitectónica de proyectos TypeScript. Importa un
 - Tres vistas sobre el mismo modelo: **Clases**, **Módulos** y **Paquetes**; las carpetas se dibujan como contenedores colapsables.
 - Superposición de diferencias con marcadores: `+` añadido, `−` eliminado, `~` modificado, `≈` solo cuerpo, `→` movido, `↻` renombrado; los nodos se tiñen de verde/rojo y las relaciones añadidas/eliminadas usan esos mismos colores con aristas fantasma. Las relaciones sin cambios son monocromas con estilo UML: herencia continua e implementación discontinua con triángulo hueco blanco, asociación e importación continuas con punta rellena; las de solo tipo mantienen línea discontinua.
 - Panel de cambios agrupado por estado, con filtros (implementación, miembros, tipos) y salto directo al nodo afectado.
+- Mapa de calor histórico opcional: acumula los commits con cambios estructurales hasta el commit seleccionado y tiñe declaraciones, miembros, módulos y paquetes con una escala secuencial azul. La leyenda muestra el máximo de la vista y los commits considerados; el calor convive con las marcas y aristas del diff sin mezclar el tinte verde/rojo de la caja.
 - Layout incremental con ELK ejecutado en un Web Worker (con fallback en proceso), posiciones persistidas por commit, proyecto y vista (con herencia desde el commit más cercano y poda LRU de 50), cámara y controles por proyecto y vista, y botón `Re-layout`.
 - Modo foco con profundidad de 1 a 3 saltos (se activa a partir de 40 nodos) y opción de ocultar el resto.
 - Análisis sintáctico con la API del compilador de TypeScript (no ejecuta el código), cache por blob y versión de analizador; los archivos con errores de sintaxis se avisan sin romper la vista.
@@ -51,10 +52,11 @@ En producción el servidor inyecta el token de sesión en `index.html`; en desar
 1. Pulsa **Importar proyecto** e indica una ruta local o una URL `https`/`ssh` pública sin credenciales.
 2. Elige la rama en el visor; **Actualizar** re-ejecuta `git fetch` y recarga el histórico.
 3. Recorre los commits con `← Anterior` / `Siguiente →`; el diagrama se recalcula para cada commit.
-4. Cambia la **Vista** (Clases / Módulos / Paquetes), oculta compartimentos con **Miembros** o recalcula el layout con **Re-layout**.
-5. En el **panel de cambios**, haz clic en una entrada para enfocar el nodo afectado (cambia de vista si es necesario). Usa los filtros para acotar el overlay.
-6. Activa **Modo foco** y ajusta la profundidad; marca **Ocultar el resto** para ver solo el vecindario del foco.
-7. El zoom y el desplazamiento del lienzo se guardan por proyecto y vista.
+4. Activa **Mapa de calor** para ver la actividad estructural acumulada hasta el commit seleccionado; la escala azul y la leyenda se actualizan al navegar y el control se conserva al reabrir el proyecto.
+5. Cambia la **Vista** (Clases / Módulos / Paquetes), oculta compartimentos con **Miembros** o recalcula el layout con **Re-layout**.
+6. En el **panel de cambios**, haz clic en una entrada para enfocar el nodo afectado (cambia de vista si es necesario). Usa los filtros para acotar el overlay.
+7. Activa **Modo foco** y ajusta la profundidad; marca **Ocultar el resto** para ver solo el vecindario del foco.
+8. El zoom y el desplazamiento del lienzo se guardan por proyecto y vista.
 
 ## Scripts
 
@@ -101,6 +103,7 @@ Todas las rutas salvo `/api/health` requieren el token de sesión (`x-dcv-token`
 | `GET /api/projects/:id/branches`                   | Lista de ramas                                        |
 | `GET /api/projects/:id/commits?branch=`            | Histórico del proyecto                                |
 | `GET /api/projects/:id/commits/:sha/model?branch=` | Snapshot del commit y diff contra su primer padre     |
+| `GET /api/projects/:id/commits/:sha/heatmap?branch=` | Mapa de calor acumulado hasta el commit             |
 | `GET /api/events`                                  | Eventos SSE de importación                            |
 | `GET /api/projects/:id/events`                     | Eventos SSE de análisis del proyecto                  |
 
@@ -131,8 +134,8 @@ Fuera del alcance de la versión actual: repositorios privados por URL, otros le
 
 ## Estado del proyecto
 
-Los cambios `add-uml-history-viewer` (58/58 tareas), `save-commit-diagram-positions` (11/11 tareas), `add-node-change-colors` (8/8 tareas), `add-edge-change-colors` (10/10 tareas) y `use-uml-edge-styles` (9/9 tareas) están completos. La verificación incluye:
+Los cambios `add-uml-history-viewer` (58/58 tareas), `save-commit-diagram-positions` (11/11 tareas), `add-node-change-colors` (8/8 tareas), `add-edge-change-colors` (10/10 tareas), `use-uml-edge-styles` (9/9 tareas) y `add-change-heatmap` (16/16 tareas) están completos. La verificación incluye:
 
-- `pnpm test`: 205 pruebas (shared 5, analyzer 36, web 97, server 67).
-- `pnpm e2e`: 5 pruebas Playwright (importación, navegación, cambio de vista, foco, persistencia de cámara, restauración de posiciones por commit, tinte de nodos y estilos UML/colores de relaciones).
+- `pnpm test`: 231 pruebas (shared 6, analyzer 36, web 108, server 81).
+- `pnpm e2e`: 6 pruebas Playwright (importación, navegación, cambio de vista, foco, persistencia de cámara, restauración de posiciones por commit, tinte de nodos, estilos UML/colores de relaciones y mapa de calor histórico).
 - `pnpm benchmark`: en un repositorio sintético de 100 archivos y 800 clases, snapshot en frío de 263.6 ms, con cache 42.7 ms (x6.2), diff 8.2 ms y layout ELK de 216 ms; el umbral de foco de 40 nodos y la cache por blob quedan validados con estos datos.

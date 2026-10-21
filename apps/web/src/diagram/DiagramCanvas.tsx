@@ -12,7 +12,7 @@ import {
   type Node as FlowNode,
   type NodeProps
 } from "@xyflow/react";
-import type { CommitInfo } from "@dcv/shared";
+import type { CommitInfo, HeatmapResponse } from "@dcv/shared";
 import type { DiagramGhost, DiagramOverlay, OverlayStatus } from "./overlay.js";
 import type { DiagramNode, DiagramProjection } from "./projection.js";
 import type { ClassNodeData, ModuleNodeData, PackageNodeData } from "./projection.js";
@@ -28,6 +28,7 @@ import { reconcileLayout } from "./layout/reconcile.js";
 import { VisualStateStore, type VisualControls } from "./layout/persistence.js";
 import type { LayoutPositions } from "./layout/types.js";
 import { edgeAppearance, type EdgeAppearance } from "./edgeStyle.js";
+import { heatLevel, heatmapMaxima, type HeatLevel, type HeatmapMaxima } from "./heatmap.js";
 
 export interface CanvasLeafData {
   node: DiagramNode;
@@ -35,6 +36,10 @@ export interface CanvasLeafData {
   memberChanges: Map<string, OverlayStatus>;
   declarationChanges: Map<string, OverlayStatus>;
   showMembers: boolean;
+  heatCount: number;
+  heatLevel: HeatLevel;
+  memberHeatLevels: Map<string, HeatLevel>;
+  declarationHeatLevels: Map<string, HeatLevel>;
   ghost: boolean;
   onOpenClass?: (declarationId: string) => void;
   [key: string]: unknown;
@@ -58,6 +63,7 @@ export interface DiagramCanvasProps {
   overlay: DiagramOverlay | null;
   focusedNodeId: string | null;
   controls: VisualControls;
+  heatmap?: HeatmapResponse | null;
   relayoutToken: number;
   onToggleFolder: (path: string) => void;
   onOpenClass: (declarationId: string) => void;
@@ -75,6 +81,7 @@ export function DiagramCanvas({
   overlay,
   focusedNodeId,
   controls,
+  heatmap = null,
   relayoutToken,
   onToggleFolder,
   onOpenClass,
@@ -86,6 +93,10 @@ export function DiagramCanvas({
   const previousToken = useRef(relayoutToken);
   const positionsRef = useRef<LayoutPositions>({});
   const runner = layoutRunner ?? defaultLayoutRunner();
+  const heatmapMax = useMemo(
+    () => heatmapMaxima(heatmap, projection.nodes.map((node) => node.id)),
+    [heatmap, projection]
+  );
   const savedCamera = useMemo(() => visualStore.loadCamera(view), [visualStore, view]);
   const callbacks = useRef({ onLayout, onToggleFolder, onOpenClass });
   callbacks.current = { onLayout, onToggleFolder, onOpenClass };
@@ -159,6 +170,8 @@ export function DiagramCanvas({
         result.positions,
         allNodes,
         projection,
+        heatmap,
+        heatmapMax,
         overlay,
         visibleIds,
         controls,
@@ -188,6 +201,8 @@ export function DiagramCanvas({
     overlay,
     focusedNodeId,
     controls,
+    heatmap,
+    heatmapMax,
     relayoutToken,
     view,
     visualStore,
@@ -251,6 +266,9 @@ function ClassFlowView({ data }: NodeProps) {
         memberChanges={value.memberChanges}
         ghost={value.ghost}
         showMembers={value.showMembers}
+        heatCount={value.heatCount}
+        heatLevel={value.heatLevel}
+        memberHeatLevels={value.memberHeatLevels}
       />
       <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </>
@@ -268,6 +286,9 @@ function ModuleFlowView({ data }: NodeProps) {
         declarationChanges={value.declarationChanges}
         ghost={value.ghost}
         showMembers={value.showMembers}
+        heatCount={value.heatCount}
+        heatLevel={value.heatLevel}
+        declarationHeatLevels={value.declarationHeatLevels}
         onOpenClass={value.onOpenClass}
       />
       <Handle type="source" position={Position.Bottom} isConnectable={false} />
@@ -284,6 +305,8 @@ function PackageFlowView({ data }: NodeProps) {
         data={value.node.data as PackageNodeData}
         change={ghostChange(value)}
         ghost={value.ghost}
+        heatCount={value.heatCount}
+        heatLevel={value.heatLevel}
       />
       <Handle type="source" position={Position.Bottom} isConnectable={false} />
     </>
@@ -401,6 +424,8 @@ function buildFlow(
   positions: LayoutPositions,
   allNodes: DiagramNode[],
   projection: DiagramProjection,
+  heatmap: HeatmapResponse | null,
+  heatmapMax: HeatmapMaxima,
   overlay: DiagramOverlay | null,
   visible: Set<string> | null,
   controls: VisualControls,
@@ -447,13 +472,44 @@ function buildFlow(
         if (dimmed) {
           hiddenIds.push(node.id);
         }
+        const ghost = node.id.startsWith("ghost:");
+        const heatCount = heatmap && !ghost ? heatmap.nodes[node.id] ?? 0 : 0;
+        const level = heatLevel(heatCount, heatmapMax.nodes);
+        const memberHeatLevels = new Map<string, HeatLevel>();
+        const declarationHeatLevels = new Map<string, HeatLevel>();
+        if (heatmap && !ghost) {
+          for (const [key, count] of Object.entries(
+            heatmap.members[node.id] ?? {}
+          )) {
+            memberHeatLevels.set(key, heatLevel(count, heatmapMax.members));
+          }
+          if (node.kind === "module") {
+            const moduleData = node.data as ModuleNodeData;
+            for (const declaration of [
+              ...moduleData.functions,
+              ...moduleData.types
+            ]) {
+              declarationHeatLevels.set(
+                declaration.id,
+                heatLevel(
+                  heatmap.nodes[declaration.id],
+                  heatmapMax.nodes
+                )
+              );
+            }
+          }
+        }
         const data: CanvasLeafData = {
           node,
           change: overlay?.nodeStatuses.get(node.id) ?? null,
           memberChanges: overlay?.memberStatuses.get(node.id) ?? new Map(),
           declarationChanges: overlay?.declarationStatuses ?? new Map(),
           showMembers: controls.showMembers,
-          ghost: node.id.startsWith("ghost:"),
+          heatCount,
+          heatLevel: level,
+          memberHeatLevels,
+          declarationHeatLevels,
+          ghost,
           onOpenClass
         };
         nodes.push({

@@ -1,6 +1,7 @@
 import type {
   CommitListResponse,
   DiagramView,
+  HeatmapResponse,
   ImportProgressEvent,
   ImportProjectResult,
   ModelResponse,
@@ -128,6 +129,12 @@ export class DcvClient {
   getModel(id: string, sha: string, branch?: string): Promise<ModelResponse> {
     return this.request<ModelResponse>(
       `/api/projects/${encodeURIComponent(id)}/commits/${encodeURIComponent(sha)}/model${branchQuery(branch)}`
+    );
+  }
+
+  getHeatmap(id: string, sha: string, branch?: string): Promise<HeatmapResponse> {
+    return this.request<HeatmapResponse>(
+      `/api/projects/${encodeURIComponent(id)}/commits/${encodeURIComponent(sha)}/heatmap${branchQuery(branch)}`
     );
   }
 

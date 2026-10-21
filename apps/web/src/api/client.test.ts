@@ -87,6 +87,26 @@ describe("DcvClient", () => {
     expect(calls[2]!.url).toBe("/api/projects/p1/commits/abc/model?branch=main");
   });
 
+  it("consulta el mapa de calor con la rama codificada", async () => {
+    const { client, calls, respondWith } = createHarness();
+    respondWith(() =>
+      jsonResponse({
+        branch: "feature/x",
+        commit: "abc",
+        commits: 4,
+        nodes: { "module:src/a.ts": 2 },
+        members: {}
+      })
+    );
+
+    const heatmap = await client.getHeatmap("p1", "abc", "feature/x");
+
+    expect(calls[0]!.url).toBe(
+      "/api/projects/p1/commits/abc/heatmap?branch=feature%2Fx"
+    );
+    expect(heatmap.commits).toBe(4);
+  });
+
   it("envía el cuerpo JSON de importación y actualización", async () => {
     const { client, calls } = createHarness();
 

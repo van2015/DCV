@@ -50,6 +50,7 @@ describe("VisualStateStore", () => {
       focusEnabled: false,
       focusDepth: 1,
       focusHide: false,
+      heatmapEnabled: false,
       collapsedFolders: []
     });
 
@@ -58,6 +59,7 @@ describe("VisualStateStore", () => {
       focusEnabled: true,
       focusDepth: 2,
       focusHide: true,
+      heatmapEnabled: true,
       collapsedFolders: ["src/util"]
     });
     expect(new VisualStateStore(storage, "p1").loadControls()).toEqual({
@@ -65,6 +67,7 @@ describe("VisualStateStore", () => {
       focusEnabled: true,
       focusDepth: 2,
       focusHide: true,
+      heatmapEnabled: true,
       collapsedFolders: ["src/util"]
     });
 

@@ -1,6 +1,7 @@
 import {
   ANALYZER_VERSION,
   type CommitListResponse,
+  type HeatmapResponse,
   type ImportProgressEvent,
   type ModelResponse
 } from "@dcv/shared";
@@ -167,6 +168,61 @@ describe("API de proyectos e histórico", () => {
       await app.request(`/api/projects/${project.id}`)
     ).json()) as { lastCommit: string | null };
     expect(projectAfter.lastCommit).toBe(commits.commits[2]!.sha);
+  });
+
+  it("calcula el mapa de calor acumulado y valida rama y commit", async () => {
+    const { app, repo } = await setup();
+    const { project } = await importFixture(app, repo);
+    const commits = (await (
+      await app.request(`/api/projects/${project.id}/commits`)
+    ).json()) as CommitListResponse;
+
+    const baseline = await app.request(
+      `/api/projects/${project.id}/commits/${commits.commits[0]!.sha}/heatmap`
+    );
+    expect(baseline.status).toBe(200);
+    const baselineBody = (await baseline.json()) as HeatmapResponse;
+    expect(baselineBody.commits).toBe(1);
+    expect(baselineBody.branch).toBe("main");
+    expect(baselineBody.nodes["src/user.ts#interface:User"]).toBe(0);
+    expect(baselineBody.nodes["module:src/user.ts"]).toBe(0);
+    expect(baselineBody.nodes["package:src"]).toBe(0);
+
+    const second = await app.request(
+      `/api/projects/${project.id}/commits/${commits.commits[1]!.sha}/heatmap?branch=main`
+    );
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as HeatmapResponse;
+    expect(secondBody.commit).toBe(commits.commits[1]!.sha);
+    expect(secondBody.commits).toBe(2);
+    expect(secondBody.nodes["src/order.ts#interface:Order"]).toBe(1);
+    expect(secondBody.nodes["module:src/order.ts"]).toBe(1);
+    expect(secondBody.nodes["package:src"]).toBe(1);
+    expect(secondBody.nodes["src/user.ts#interface:User"]).toBe(0);
+
+    const head = await app.request(
+      `/api/projects/${project.id}/commits/${commits.commits[2]!.sha}/heatmap`
+    );
+    expect(head.status).toBe(200);
+    const headBody = (await head.json()) as HeatmapResponse;
+    expect(headBody.commits).toBe(3);
+    expect(headBody.nodes["src/order.ts#interface:Order"]).toBe(1);
+
+    const missing = await app.request(
+      `/api/projects/${project.id}/commits/inexistente/heatmap`
+    );
+    expect(missing.status).toBe(404);
+    expect(((await missing.json()) as { error: { code: string } }).error.code).toBe(
+      "commit_not_found"
+    );
+
+    const missingBranch = await app.request(
+      `/api/projects/${project.id}/commits/${commits.commits[0]!.sha}/heatmap?branch=no-existe`
+    );
+    expect(missingBranch.status).toBe(404);
+    expect(
+      ((await missingBranch.json()) as { error: { code: string } }).error.code
+    ).toBe("branch_not_found");
   });
 
   it("devuelve errores con envelope para proyectos o commits inválidos", async () => {

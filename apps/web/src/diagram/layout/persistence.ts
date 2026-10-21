@@ -12,6 +12,7 @@ export interface VisualControls {
   focusEnabled: boolean;
   focusDepth: number;
   focusHide: boolean;
+  heatmapEnabled: boolean;
   collapsedFolders: string[];
 }
 
@@ -20,6 +21,7 @@ export const DEFAULT_VISUAL_CONTROLS: VisualControls = {
   focusEnabled: false,
   focusDepth: 1,
   focusHide: false,
+  heatmapEnabled: false,
   collapsedFolders: []
 };
 
@@ -126,6 +128,10 @@ export class VisualStateStore {
         typeof value.focusHide === "boolean"
           ? value.focusHide
           : DEFAULT_VISUAL_CONTROLS.focusHide,
+      heatmapEnabled:
+        typeof value.heatmapEnabled === "boolean"
+          ? value.heatmapEnabled
+          : DEFAULT_VISUAL_CONTROLS.heatmapEnabled,
       collapsedFolders: Array.isArray(value.collapsedFolders)
         ? value.collapsedFolders.filter((item): item is string => typeof item === "string")
         : []

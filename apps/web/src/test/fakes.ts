@@ -1,6 +1,7 @@
 import type {
   CommitInfo,
   CommitListResponse,
+  HeatmapResponse,
   ImportProgressEvent,
   ImportProjectResult,
   ModelResponse,
@@ -43,6 +44,20 @@ export function makeCommit(
     authorEmail: "dcv@example.com",
     date: "2026-01-01T00:00:00Z",
     changedFiles: 1
+  };
+}
+
+export function makeHeatmap(
+  commit: string,
+  overrides: Partial<HeatmapResponse> = {}
+): HeatmapResponse {
+  return {
+    branch: "main",
+    commit,
+    commits: 1,
+    nodes: {},
+    members: {},
+    ...overrides
   };
 }
 
@@ -106,6 +121,9 @@ export class FakeClient implements ClientLike {
   commits: Record<string, CommitInfo[]>;
   branches: Record<string, string[]>;
   models: Record<string, ModelResponse>;
+  heatmaps: Record<string, HeatmapResponse>;
+  heatmapGates: Record<string, Promise<void>> = {};
+  heatmapCalls: { id: string; sha: string; branch?: string }[] = [];
   errors: Partial<Record<keyof ClientLike, Error>> = {};
   importCalls: ProjectImportRequest[] = [];
   importResult: ImportProjectResult | null = null;
@@ -122,11 +140,13 @@ export class FakeClient implements ClientLike {
     commits?: Record<string, CommitInfo[]>;
     branches?: Record<string, string[]>;
     models?: Record<string, ModelResponse>;
+    heatmaps?: Record<string, HeatmapResponse>;
   } = {}) {
     this.projects = options.projects ?? [];
     this.commits = options.commits ?? {};
     this.branches = options.branches ?? {};
     this.models = options.models ?? {};
+    this.heatmaps = options.heatmaps ?? {};
   }
 
   async listProjects(): Promise<Project[]> {
@@ -213,6 +233,24 @@ export class FakeClient implements ClientLike {
       ...makeModel(commit),
       snapshot: { ...makeModel(commit).snapshot, branch: branch ?? "main" }
     };
+  }
+
+  async getHeatmap(
+    id: string,
+    sha: string,
+    branch?: string
+  ): Promise<HeatmapResponse> {
+    this.maybeThrow("getHeatmap");
+    this.heatmapCalls.push({ id, sha, ...(branch ? { branch } : {}) });
+    const gate = this.heatmapGates[sha];
+    if (gate) {
+      await gate;
+    }
+    const key = `${id}:${sha}`;
+    return (
+      this.heatmaps[key] ??
+      makeHeatmap(sha, { branch: branch ?? "main" })
+    );
   }
 
   subscribeEvents(

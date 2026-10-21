@@ -308,16 +308,91 @@ function expectBlack(color: string): void {
   expect(blue).toBeLessThan(32);
 }
 
-function expectChannelDominance(color: string, dominant: "red" | "green"): void {
+function expectChannelDominance(
+  color: string,
+  dominant: "red" | "green" | "blue"
+): void {
   const [red, green, blue] = colorChannels(color);
   if (dominant === "green") {
     expect(green).toBeGreaterThan(red + 5);
     expect(green).toBeGreaterThan(blue + 5);
     return;
   }
+  if (dominant === "blue") {
+    expect(blue).toBeGreaterThan(red + 5);
+    expect(blue).toBeGreaterThan(green + 5);
+    return;
+  }
   expect(red).toBeGreaterThan(green + 5);
   expect(red).toBeGreaterThan(blue + 5);
 }
+
+test("activa el mapa de calor, actualiza la historia y persiste el control", async ({
+  page
+}) => {
+  await page.goto("/");
+  await importProject(page, fixture("heatmap"));
+  await openProject(page, "heatmap");
+  await page.getByLabel("Vista").selectOption("classes");
+  await expect(page.locator(".player-position")).toHaveText("1 / 5");
+
+  const canvas = page.getByLabel("Diagrama de classes");
+  const legend = page.getByLabel("Leyenda del mapa de calor");
+  const control = page.getByRole("checkbox", {
+    name: "Mapa de calor",
+    exact: true
+  });
+  await control.check();
+  await expect(legend).toContainText("Máx. 0");
+  await expect(legend).toContainText("1 commit");
+
+  for (let position = 2; position <= 5; position += 1) {
+    await page.getByRole("button", { name: "Siguiente →" }).click();
+    await expect(page.locator(".player-position")).toHaveText(`${position} / 5`);
+    await expect(legend).toContainText(`${position} commit${position === 1 ? "" : "s"}`);
+  }
+  await expect(legend).toContainText("Máx. 4");
+
+  const hot = canvas.getByLabel("class Hot");
+  const cold = canvas.getByLabel("class Cold");
+  const steady = canvas.getByLabel("class Steady");
+  const newbie = canvas.getByLabel("class Newbie");
+  await expect(hot).toHaveClass(/heat-4/);
+  await expect(cold).toHaveClass(/heat-1/);
+  await expect(steady).not.toHaveClass(/heat-/);
+  await expect(newbie).toHaveClass(/heat-1/);
+  await expect(newbie).toHaveClass(/change-added/);
+  await expect(newbie.locator(".uml-node-header .change-badge")).toHaveText("+");
+  await expect(hot.locator(".uml-member").filter({ hasText: "beta" })).toHaveClass(
+    /heat-4/
+  );
+
+  const newbieColors = await newbie.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, border: style.borderTopColor };
+  });
+  expectChannelDominance(newbieColors.background, "blue");
+  expectChannelDominance(newbieColors.border, "blue");
+
+  const addedEdge = canvas.locator(".react-flow__edge.edge-added.edge-extends");
+  await expect(addedEdge).toHaveCount(1);
+  expectChannelDominance(await strokeOf(addedEdge), "green");
+
+  await page.getByRole("button", { name: "← Anterior" }).click();
+  await expect(page.locator(".player-position")).toHaveText("4 / 5");
+  await expect(legend).toContainText("4 commits");
+  await expect(legend).toContainText("Máx. 3");
+  await expect(canvas.getByLabel("class Newbie")).toHaveCount(0);
+  await expect(hot).toHaveClass(/heat-4/);
+  await expect(cold).toHaveClass(/heat-2/);
+
+  await page.reload();
+  await expect(
+    page.getByRole("checkbox", { name: "Mapa de calor", exact: true })
+  ).toBeChecked();
+  await expect(page.getByLabel("Leyenda del mapa de calor")).toBeVisible();
+  await expect(page.getByLabel("Leyenda del mapa de calor")).toContainText("Máx.");
+});
 
 test("tiñe los nodos añadidos y eliminados según el estado", async ({ page }) => {
   await page.goto("/");

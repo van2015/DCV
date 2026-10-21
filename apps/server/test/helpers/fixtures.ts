@@ -10,7 +10,8 @@ export type FixtureScenario =
   | "broken"
   | "large"
   | "diff-colors"
-  | "edge-colors";
+  | "edge-colors"
+  | "heatmap";
 
 export interface FixtureCommit {
   sha: string;
@@ -389,6 +390,176 @@ function scenarioCommits(scenario: FixtureScenario): CommitSpec[] {
               "",
               "  run(): string {",
               "    return this.label;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        }
+      ];
+    case "heatmap":
+      return [
+        {
+          message: "base del mapa de calor",
+          files: {
+            "src/hot.ts": [
+              "export class Hot {",
+              "  alpha(): string {",
+              "    return \"a\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/cold.ts": [
+              "export class Cold {",
+              "  chill(): string {",
+              "    return \"cold\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/steady.ts": [
+              "export class Steady {",
+              "  step(): number {",
+              "    return 1;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "Hot añade beta y Steady cambia su cuerpo",
+          files: {
+            "src/hot.ts": [
+              "export class Hot {",
+              "  alpha(): string {",
+              "    return \"a\";",
+              "  }",
+              "",
+              "  beta(): string {",
+              "    return \"b\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/steady.ts": [
+              "export class Steady {",
+              "  step(): number {",
+              "    return 2;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "Hot añade gamma y Cold añade freeze",
+          files: {
+            "src/hot.ts": [
+              "export class Hot {",
+              "  alpha(): string {",
+              "    return \"a\";",
+              "  }",
+              "",
+              "  beta(): string {",
+              "    return \"b\";",
+              "  }",
+              "",
+              "  gamma(): string {",
+              "    return \"g\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/cold.ts": [
+              "export class Cold {",
+              "  chill(): string {",
+              "    return \"cold\";",
+              "  }",
+              "",
+              "  freeze(): string {",
+              "    return \"frozen\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/steady.ts": [
+              "export class Steady {",
+              "  step(): number {",
+              "    return 3;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "Hot añade delta y Steady cambia otra vez",
+          files: {
+            "src/hot.ts": [
+              "export class Hot {",
+              "  alpha(): string {",
+              "    return \"a\";",
+              "  }",
+              "",
+              "  beta(): string {",
+              "    return \"b\";",
+              "  }",
+              "",
+              "  gamma(): string {",
+              "    return \"g\";",
+              "  }",
+              "",
+              "  delta(): string {",
+              "    return \"d\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/steady.ts": [
+              "export class Steady {",
+              "  step(): number {",
+              "    return 4;",
+              "  }",
+              "}",
+              ""
+            ].join("\n")
+          }
+        },
+        {
+          message: "Hot añade epsilon y aparece Newbie",
+          files: {
+            "src/hot.ts": [
+              "export class Hot {",
+              "  alpha(): string {",
+              "    return \"a\";",
+              "  }",
+              "",
+              "  beta(): string {",
+              "    return \"b\";",
+              "  }",
+              "",
+              "  gamma(): string {",
+              "    return \"g\";",
+              "  }",
+              "",
+              "  delta(): string {",
+              "    return \"d\";",
+              "  }",
+              "",
+              "  epsilon(): string {",
+              "    return \"e\";",
+              "  }",
+              "}",
+              ""
+            ].join("\n"),
+            "src/newbie.ts": [
+              "import { Hot } from \"./hot\";",
+              "",
+              "export class Newbie extends Hot {",
+              "  start(): string {",
+              "    return \"new\";",
               "  }",
               "}",
               ""

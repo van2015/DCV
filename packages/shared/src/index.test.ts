@@ -6,6 +6,7 @@ import {
   memberKey,
   moduleNodeId,
   packageNodeId,
+  type HeatmapResponse,
   type Project
 } from "./index.js";
 
@@ -43,6 +44,17 @@ describe("shared DTO schemas", () => {
       lastCommit: null
     };
     expect(JSON.parse(JSON.stringify(project))).toEqual(project);
+  });
+
+  it("serializes a heatmap response round-trip", () => {
+    const heatmap: HeatmapResponse = {
+      branch: "main",
+      commit: "abc",
+      commits: 3,
+      nodes: { "src/a.ts#class:A": 2, "module:src/a.ts": 2, "package:src": 2 },
+      members: { "src/a.ts#class:A": { "method:run": 2 } }
+    };
+    expect(JSON.parse(JSON.stringify(heatmap))).toEqual(heatmap);
   });
 
   it("builds stable node and member identifiers", () => {
